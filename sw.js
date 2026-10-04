@@ -1,6 +1,6 @@
 // Cambia este número cada vez que subas una versión nueva de index.html,
 // o el teléfono seguirá mostrando la versión anterior.
-const VERSION = 'gastos-v1';
+const VERSION = 'gastos-v2';
 const ARCHIVOS = ['./', './index.html', './manifest.json',
                   './icons/icon-192.png', './icons/icon-512.png'];
 
