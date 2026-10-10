@@ -307,6 +307,7 @@
       padding:13px 8px; font-size:14px; cursor:pointer; text-align:center; text-decoration:none; }
     .btn2.acc{ background:var(--accent-dim); border-color:var(--accent); color:#d8ffe8; font-weight:600; }
     .btn2:disabled{ opacity:.4; }
+    .btn2.on{ border-color:var(--accent); }
     .dmov{ padding:11px 0; }
     .dmov + .dmov{ border-top:1px solid var(--line); }
     .dmov .r{ display:flex; justify-content:space-between; gap:10px; cursor:pointer; }
@@ -1593,28 +1594,42 @@
       // Acciones
       if(p.saldo){
         var br = el('div', 'btnrow');
-        var bPago = el('button', 'btn2', p.saldo > 0 ? 'Me pagó una parte' : 'Le pagué una parte');
-        var bSaldar = el('button', 'btn2 acc', 'Saldar todo');
-        bPago.addEventListener('click', function(){ pagoAbierto = !pagoAbierto; renderPersona(); });
-        bSaldar.addEventListener('click', function(){
-          var txt = p.saldo > 0 ? p.nombre + ' te pagó ' + fmtMonto(p.saldo) : 'Le pagaste ' + fmtMonto(-p.saldo) + ' a ' + p.nombre;
-          if(confirm('¿Confirmas? ' + txt + ' y quedan al día.')) accionDeuda({ action:'saldar', persona:p.nombre, fecha:isoHoy() }, bSaldar);
-        });
+        var bPago = el('button', 'btn2' + (pagoAbierto === 'parte' ? ' on' : ''), p.saldo > 0 ? 'Me pagó una parte' : 'Le pagué una parte');
+        var bSaldar = el('button', 'btn2 acc', 'Saldar');
+        bPago.addEventListener('click', function(){ pagoAbierto = pagoAbierto === 'parte' ? false : 'parte'; renderPersona(); });
+        bSaldar.addEventListener('click', function(){ pagoAbierto = pagoAbierto === 'saldar' ? false : 'saldar'; renderPersona(); });
         br.appendChild(bPago); br.appendChild(bSaldar); box.appendChild(br);
 
         if(pagoAbierto){
+          var debido = Math.abs(p.saldo);
+          var wrap = el('div', 'card');
+          wrap.appendChild(el('div', 'lbl', pagoAbierto === 'saldar'
+            ? (p.saldo > 0 ? '¿Cuánto te pagó ' + p.nombre.split(' ')[0] + '?' : '¿Cuánto le pagaste?')
+            : '¿Cuánto fue el pago?'));
           var inl = el('div', 'inl');
           var inp = el('input', 'fld'); inp.inputMode = 'numeric'; inp.placeholder = '$0';
           montoInput(inp);
+          if(pagoAbierto === 'saldar') inp.value = fmtMonto(debido);
           var ok = el('button', 'btn2 acc', 'Guardar'); ok.style.flex = 'none'; ok.style.padding = '13px 18px';
+          var hint = el('div', 'm'); hint.style.marginTop = '8px'; hint.style.fontSize = '13px'; hint.style.opacity = '.75';
+          function pintarHint(){
+            var m = Number(inp.value.replace(/\D/g, ''));
+            if(!m) hint.textContent = 'Debía ' + fmtMonto(debido) + '.';
+            else if(m === debido) hint.textContent = 'Exacto: quedan al día.';
+            else if(m < debido) hint.textContent = 'Queda pendiente ' + fmtMonto(debido - m) + '.';
+            else hint.textContent = p.saldo > 0
+              ? 'Quedan al día y los ' + fmtMonto(m - debido) + ' de más se registran como ingreso (Otros).'
+              : 'Quedan al día. Los ' + fmtMonto(m - debido) + ' de más no se registran: si fue un regalo, anótalo como gasto aparte.';
+          }
+          inp.addEventListener('input', pintarHint); pintarHint();
           ok.addEventListener('click', function(){
             var m = Number(inp.value.replace(/\D/g, ''));
             if(!m){ inp.focus(); return; }
-            if(m > Math.abs(p.saldo)){ alert('El pago supera el saldo de ' + fmtMonto(Math.abs(p.saldo)) + '. Usa "Saldar todo".'); return; }
-            accionDeuda({ action:'abono', persona:p.nombre, monto:m, fecha:isoHoy(), id:nuevoId() }, ok, function(){ pagoAbierto = false; });
+            registrarPago(p, m, ok);
           });
-          inl.appendChild(inp); inl.appendChild(ok); box.appendChild(inl);
-          setTimeout(function(){ inp.focus(); }, 50);
+          inl.appendChild(inp); inl.appendChild(ok);
+          wrap.appendChild(inl); wrap.appendChild(hint); box.appendChild(wrap);
+          setTimeout(function(){ inp.focus(); inp.select && inp.select(); }, 50);
         }
       }
 
@@ -1692,6 +1707,35 @@
           cargarDeudas(); cargarResumen(); cargarPresupuesto();
         })
         .catch(function(){ if(btn) btn.disabled = false; alert('Sin conexión. Intenta de nuevo.'); });
+    }
+
+    /**
+     * Registra un pago contra el saldo de una persona.
+     *  - menor al saldo  → abono (queda pendiente el resto)
+     *  - igual al saldo  → saldar
+     *  - mayor al saldo  → saldar + si te debían, la diferencia entra como Ingreso (categoría Otros)
+     */
+    function registrarPago(p, m, btn){
+      var debido = Math.abs(p.saldo), hoy = isoHoy();
+      var cerrar = function(){ pagoAbierto = false; };
+      if(m < debido){
+        accionDeuda({ action:'abono', persona:p.nombre, monto:m, fecha:hoy, id:nuevoId() }, btn, cerrar);
+        return;
+      }
+      var extra = m - debido;
+      var txt = (p.saldo > 0 ? p.nombre + ' te pagó ' : 'Le pagaste ') + fmtMonto(m) + (p.saldo > 0 ? '' : ' a ' + p.nombre) + ' y quedan al día.';
+      if(extra && p.saldo > 0) txt += '\n' + fmtMonto(extra) + ' de más se registran como ingreso.';
+      if(!confirm('¿Confirmas? ' + txt)) return;
+      accionDeuda({ action:'saldar', persona:p.nombre, fecha:hoy }, btn, function(){
+        cerrar();
+        if(extra && p.saldo > 0){
+          var cats = catsDe('Ingreso'), cat = cats.indexOf('Otros') >= 0 ? 'Otros' : (cats[cats.length - 1] || 'Otros');
+          cola.push({ id:nuevoId(), tipo:'Ingreso', monto:extra, descripcion:'Extra pago deuda · ' + p.nombre,
+                      categoria:cat, fecha:hoy, mes:mesPorDefecto(hoy, 'Ingreso', cat) });
+          LS.set('gastos_cola', cola);
+          renderInicio(); enviarCola();
+        }
+      });
     }
 
     /* ---------- Formulario "Nueva deuda" ---------- */
