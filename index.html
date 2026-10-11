@@ -308,6 +308,10 @@
     .btn2.acc{ background:var(--accent-dim); border-color:var(--accent); color:#d8ffe8; font-weight:600; }
     .btn2:disabled{ opacity:.4; }
     .btn2.on{ border-color:var(--accent); }
+    .perdon{ margin-top:10px; padding:12px; border:1px solid var(--line); border-radius:12px; }
+    .perdon .sub{ font-size:13px; opacity:.75; margin-top:10px; }
+    .perdon .btncol{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+    .perdon .btncol .btn2{ padding:12px; }
     .dmov{ padding:11px 0; }
     .dmov + .dmov{ border-top:1px solid var(--line); }
     .dmov .r{ display:flex; justify-content:space-between; gap:10px; cursor:pointer; }
@@ -1565,7 +1569,7 @@
     }
 
     function abrirPersona(nombre){
-      personaAbierta = nombre; movAbierto = null; pagoAbierto = false;
+      personaAbierta = nombre; movAbierto = null; pagoAbierto = false; perdonAbierto = null;
       history.pushState({ capa:'persona' }, '');
       irA('v-persona'); renderPersona();
       $('v-persona').scrollTop = 0;
@@ -1577,7 +1581,7 @@
     }
     $('perBack').addEventListener('click', function(){ cerrarPersona(); });
 
-    var pagoAbierto = false;
+    var pagoAbierto = false, perdonAbierto = null;
     function renderPersona(){
       var k = clave(personaAbierta);
       var movs = deudas.filter(function(x){ return clave(x.persona) === k; });
@@ -1678,9 +1682,11 @@
       if(!esPago){
         var acts = el('div', 'acts');
         if(x.estado === 'Pendiente'){
-          var bP = el('button', 'btn2', 'Perdonar'), bOk = el('button', 'btn2', 'Marcar pagado');
+          var bP = el('button', 'btn2' + (perdonAbierto === x.id ? ' on' : ''), 'Perdonar'), bOk = el('button', 'btn2', 'Marcar pagado');
+          var manualMeDebe = x.tipo === 'Me debe' && !x.idGasto;
           bP.addEventListener('click', function(){
-            var t = x.tipo === 'Me debe' ? (x.idGasto ? 'Vuelve a contar como gasto tuyo.' : 'Deja de contar en el saldo.') : 'Deja de contar en el saldo.';
+            if(manualMeDebe){ perdonAbierto = perdonAbierto === x.id ? null : x.id; renderPersona(); return; }
+            var t = x.tipo === 'Me debe' ? 'Vuelve a contar como gasto tuyo.' : 'Deja de contar en el saldo.';
             if(confirm('¿Perdonar ' + fmtMonto(x.monto) + '? ' + t)) accionDeuda({ action:'deuda_estado', id:x.id, estado:'Perdonado' }, bP);
           });
           bOk.addEventListener('click', function(){ accionDeuda({ action:'deuda_estado', id:x.id, estado:'Pagado' }, bOk); });
@@ -1691,7 +1697,8 @@
           acts.appendChild(bR);
         }
         w.appendChild(acts);
-        r.addEventListener('click', function(){ movAbierto = movAbierto === x.id ? null : x.id; renderPersona(); });
+        if(x.estado === 'Pendiente' && x.tipo === 'Me debe' && !x.idGasto && perdonAbierto === x.id && movAbierto === x.id) w.appendChild(panelPerdon(x));
+        r.addEventListener('click', function(){ movAbierto = movAbierto === x.id ? null : x.id; perdonAbierto = null; renderPersona(); });
       }
       return w;
     }
@@ -1707,6 +1714,65 @@
           cargarDeudas(); cargarResumen(); cargarPresupuesto();
         })
         .catch(function(){ if(btn) btn.disabled = false; alert('Sin conexión. Intenta de nuevo.'); });
+    }
+
+    /**
+     * Perdonar una deuda manual "Me debe": esa plata ya no vuelve, así que se ofrece
+     * registrarla como gasto (hoy, 1 cuota) con el medio de pago con que se pagó originalmente.
+     */
+    function panelPerdon(x){
+      var box = el('div', 'perdon');
+      box.addEventListener('click', function(e){ e.stopPropagation(); });
+      box.appendChild(el('div', 'lbl', 'Esa plata ya no vuelve. ¿La registro como gasto?'));
+
+      var medio = '', cats = cfg.categorias || [];
+      var cat = cats.indexOf('Regalos') >= 0 ? 'Regalos' : (cats.indexOf('Otros') >= 0 ? 'Otros' : (cats[0] || ''));
+
+      box.appendChild(el('div', 'sub', '¿Cómo se pagó originalmente?'));
+      var chM = el('div', 'chips');
+      (cfg.medios || []).forEach(function(m){
+        var c = el('button', 'chip', m);
+        c.addEventListener('click', function(){
+          medio = m; msg.textContent = '';
+          chM.querySelectorAll('.chip').forEach(function(z){ z.classList.toggle('sel', z === c); });
+        });
+        chM.appendChild(c);
+      });
+      box.appendChild(chM);
+
+      box.appendChild(el('div', 'sub', 'Categoría'));
+      var chC = el('div', 'chips');
+      cats.forEach(function(k){
+        var c = el('button', 'chip' + (k === cat ? ' sel' : ''), k);
+        c.addEventListener('click', function(){
+          cat = k; chC.querySelectorAll('.chip').forEach(function(z){ z.classList.toggle('sel', z === c); });
+        });
+        chC.appendChild(c);
+      });
+      box.appendChild(chC);
+
+      var msg = el('div', 'sub'); msg.style.color = 'var(--warn, #ff9f43)';
+      var b1 = el('button', 'btn2 acc', 'Registrar gasto y perdonar');
+      var b2 = el('button', 'btn2', 'Solo perdonar, ya estaba registrado');
+      var fin = function(){ perdonAbierto = null; };
+      b1.addEventListener('click', function(){
+        if(!medio){ msg.textContent = 'Elige el medio de pago.'; return; }
+        accionDeuda({ action:'deuda_estado', id:x.id, estado:'Perdonado' }, b1, function(){
+          fin();
+          var hoy = isoHoy();
+          cola.push({ id:nuevoId(), monto:Number(x.monto), descripcion:'Deuda perdonada · ' + x.persona + (x.detalle ? ' (' + x.detalle + ')' : ''),
+                      medio:medio, categoria:cat, fecha:hoy });
+          LS.set('gastos_cola', cola);
+          renderInicio(); enviarCola();
+        });
+      });
+      b2.addEventListener('click', function(){
+        if(confirm('¿Perdonar ' + fmtMonto(x.monto) + ' sin registrar gasto?'))
+          accionDeuda({ action:'deuda_estado', id:x.id, estado:'Perdonado' }, b2, fin);
+      });
+      box.appendChild(msg);
+      var col = el('div', 'btncol'); col.appendChild(b1); col.appendChild(b2); box.appendChild(col);
+      return box;
     }
 
     /**
