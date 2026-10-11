@@ -1569,7 +1569,7 @@
     }
 
     function abrirPersona(nombre){
-      personaAbierta = nombre; movAbierto = null; pagoAbierto = false; perdonAbierto = null;
+      personaAbierta = nombre; movAbierto = null; pagoAbierto = false; perdonAbierto = null; abonoItem = null;
       history.pushState({ capa:'persona' }, '');
       irA('v-persona'); renderPersona();
       $('v-persona').scrollTop = 0;
@@ -1581,7 +1581,7 @@
     }
     $('perBack').addEventListener('click', function(){ cerrarPersona(); });
 
-    var pagoAbierto = false, perdonAbierto = null;
+    var pagoAbierto = false, perdonAbierto = null, abonoItem = null;
     function renderPersona(){
       var k = clave(personaAbierta);
       var movs = deudas.filter(function(x){ return clave(x.persona) === k; });
@@ -1683,14 +1683,16 @@
         var acts = el('div', 'acts');
         if(x.estado === 'Pendiente'){
           var bP = el('button', 'btn2' + (perdonAbierto === x.id ? ' on' : ''), 'Perdonar'), bOk = el('button', 'btn2', 'Marcar pagado');
+          var bAb = el('button', 'btn2' + (abonoItem === x.id ? ' on' : ''), 'Abonar');
+          bAb.addEventListener('click', function(){ abonoItem = abonoItem === x.id ? null : x.id; perdonAbierto = null; renderPersona(); });
           var manualMeDebe = x.tipo === 'Me debe' && !x.idGasto;
           bP.addEventListener('click', function(){
-            if(manualMeDebe){ perdonAbierto = perdonAbierto === x.id ? null : x.id; renderPersona(); return; }
+            if(manualMeDebe){ perdonAbierto = perdonAbierto === x.id ? null : x.id; abonoItem = null; renderPersona(); return; }
             var t = x.tipo === 'Me debe' ? 'Vuelve a contar como gasto tuyo.' : 'Deja de contar en el saldo.';
             if(confirm('¿Perdonar ' + fmtMonto(x.monto) + '? ' + t)) accionDeuda({ action:'deuda_estado', id:x.id, estado:'Perdonado' }, bP);
           });
           bOk.addEventListener('click', function(){ accionDeuda({ action:'deuda_estado', id:x.id, estado:'Pagado' }, bOk); });
-          acts.appendChild(bP); acts.appendChild(bOk);
+          acts.appendChild(bP); acts.appendChild(bAb); acts.appendChild(bOk);
         } else {
           var bR = el('button', 'btn2', 'Reabrir');
           bR.addEventListener('click', function(){ accionDeuda({ action:'deuda_estado', id:x.id, estado:'Pendiente' }, bR); });
@@ -1698,7 +1700,8 @@
         }
         w.appendChild(acts);
         if(x.estado === 'Pendiente' && x.tipo === 'Me debe' && !x.idGasto && perdonAbierto === x.id && movAbierto === x.id) w.appendChild(panelPerdon(x));
-        r.addEventListener('click', function(){ movAbierto = movAbierto === x.id ? null : x.id; perdonAbierto = null; renderPersona(); });
+        if(x.estado === 'Pendiente' && abonoItem === x.id && movAbierto === x.id) w.appendChild(panelAbonoItem(x));
+        r.addEventListener('click', function(){ movAbierto = movAbierto === x.id ? null : x.id; perdonAbierto = null; abonoItem = null; renderPersona(); });
       }
       return w;
     }
@@ -1714,6 +1717,55 @@
           cargarDeudas(); cargarResumen(); cargarPresupuesto();
         })
         .catch(function(){ if(btn) btn.disabled = false; alert('Sin conexión. Intenta de nuevo.'); });
+    }
+
+    /**
+     * Abonar a un ítem específico de la deuda (ej: "pasaje").
+     *  - monto = ítem  → el ítem queda Pagado
+     *  - monto < ítem  → el ítem queda Pagado y se crea uno nuevo por el resto ("Pasaje (resto)"),
+     *                    con la misma fecha, para que siga visible qué falta de qué.
+     */
+    function panelAbonoItem(x){
+      var box = el('div', 'perdon');
+      box.addEventListener('click', function(e){ e.stopPropagation(); });
+      var meDebe = SIGNO[x.tipo] > 0;
+      box.appendChild(el('div', 'lbl', (meDebe ? '¿Cuánto te abonó' : '¿Cuánto le abonaste') + ' a "' + (x.detalle || x.tipo) + '"?'));
+      var inl = el('div', 'inl');
+      var inp = el('input', 'fld'); inp.inputMode = 'numeric'; inp.placeholder = '$0';
+      montoInput(inp); inp.value = fmtMonto(x.monto);
+      var ok = el('button', 'btn2 acc', 'Guardar'); ok.style.flex = 'none'; ok.style.padding = '13px 18px';
+      var hint = el('div', 'sub');
+      function pintar(){
+        var m = Number(inp.value.replace(/\D/g, ''));
+        hint.textContent = !m ? 'Este ítem es de ' + fmtMonto(x.monto) + '.'
+          : m === Number(x.monto) ? 'Este ítem queda pagado.'
+          : m < x.monto ? 'Queda pendiente ' + fmtMonto(x.monto - m) + ' de este ítem.'
+          : 'Supera el ítem (' + fmtMonto(x.monto) + '). Si cubre varios, usa "' + (meDebe ? 'Me pagó' : 'Le pagué') + ' una parte" arriba.';
+      }
+      inp.addEventListener('input', pintar); pintar();
+      ok.addEventListener('click', function(){
+        var m = Number(inp.value.replace(/\D/g, '')), total = Number(x.monto);
+        if(!m || m > total){ inp.focus(); return; }
+        ok.disabled = true;
+        postAccion({ action:'deuda_estado', id:x.id, estado:'Pagado' })
+          .then(function(j){
+            if(!j.ok) throw new Error(j.error || 'No se pudo guardar');
+            if(m === total) return j;
+            return postAccion({ action:'deuda', tipo:x.tipo, persona:x.persona, monto:total - m,
+                                detalle:(x.detalle || x.tipo).replace(/ \(resto\)$/, '') + ' (resto)',
+                                fecha:x.fecha || isoHoy(), id:nuevoId() })
+              .then(function(j2){
+                if(!j2.ok) throw new Error('Se marcó pagado, pero no se pudo crear el resto de ' + fmtMonto(total - m) + '. Agrégalo con "+ Agregar".');
+                return j2;
+              });
+          })
+          .then(function(){ abonoItem = null; movAbierto = null; cargarDeudas(); cargarResumen(); cargarPresupuesto(); })
+          .catch(function(e){ ok.disabled = false; alert(e && e.message ? e.message : 'Sin conexión. Intenta de nuevo.'); cargarDeudas(); });
+      });
+      inl.appendChild(inp); inl.appendChild(ok);
+      box.appendChild(inl); box.appendChild(hint);
+      setTimeout(function(){ inp.focus(); inp.select && inp.select(); }, 50);
+      return box;
     }
 
     /**
