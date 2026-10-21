@@ -1445,7 +1445,7 @@
 
     // Selector de opciones tipo segmento: [{k, t}] → { el, val() }
     function segmento(opts, inicial, onChange){
-      var box = el('div', 'seg' + (opts.length === 3 ? ' tri' : '')), val = inicial;
+      var box = el('div', 'seg' + (opts.length === 3 ? ' tri' : '')), val = inicial; // 4 opciones → 2×2
       opts.forEach(function(o){
         var b = el('button', o.k === val ? 'on' : '', o.t); b.type = 'button';
         b.addEventListener('click', function(){
@@ -1538,10 +1538,27 @@
 
     function armarEnviada(it, item, body, pGasto){
       var sugDebo = it.sugerida && saldoDe(it.sugerida) < 0 ? it.sugerida : '';
-      var pPres = el('div', 'tpanel'), pPago = el('div', 'tpanel');
-      var seg = segmento([{ k:'gasto', t:'Gasto' }, { k:'prestamo', t:'Le presté' }, { k:'pago', t:'Pagué deuda' }],
-        sugDebo ? 'pago' : 'gasto',
-        function(v){ pGasto.hidden = v !== 'gasto'; pPres.hidden = v !== 'prestamo'; pPago.hidden = v !== 'pago'; });
+      var pPres = el('div', 'tpanel'), pPago = el('div', 'tpanel'), pAho = el('div', 'tpanel');
+      function mostrar(v){ pGasto.hidden = v !== 'gasto'; pPres.hidden = v !== 'prestamo'; pPago.hidden = v !== 'pago'; pAho.hidden = v !== 'ahorro'; }
+      var seg = segmento([{ k:'gasto', t:'Gasto' }, { k:'ahorro', t:'Ahorro' }, { k:'prestamo', t:'Le presté' }, { k:'pago', t:'Pagué deuda' }],
+        it.ahorro ? 'ahorro' : (sugDebo ? 'pago' : 'gasto'), mostrar);
+
+      // Ahorro: a tu cuenta de inversión (Racional, Fintual…). No cuenta como gasto y crea la fila de Ahorro.
+      pAho.appendChild(el('label', 'flbl', '¿Dónde quedó?'));
+      var catsA = cfg.categoriasAhorro || ['ETFs'];
+      var catA = it.ahorro && catsA.indexOf(it.ahorro) >= 0 ? it.ahorro : catsA[catsA.length - 1];
+      var chA = el('div', 'chips');
+      catsA.forEach(function(k){
+        var c = el('button', 'chip' + (k === catA ? ' sel' : ''), k); c.type = 'button';
+        c.addEventListener('click', function(){ catA = k; chA.querySelectorAll('.chip').forEach(function(z){ z.classList.toggle('sel', z === c); }); });
+        chA.appendChild(c);
+      });
+      pAho.appendChild(chA);
+      pAho.appendChild(el('div', 'phint', it.ahorro ? 'Las transferencias a este destino ya las marcaste como ahorro. Solo confirma.'
+        : 'No cuenta como gasto y queda registrado como ahorro del mes. Las próximas transferencias a este destino llegarán sugeridas como ahorro.'));
+      var bA = el('button', 'primary pguardar', 'Registrar ahorro');
+      bA.addEventListener('click', function(){ resolverTransf(it, item, { destino:'ahorro', categoria:catA }); });
+      pAho.appendChild(bA);
 
       // Le presté: queda "Me debe" en Deudas y no cuenta como gasto
       pPres.appendChild(el('label', 'flbl', '¿A quién?'));
@@ -1577,8 +1594,8 @@
       pPago.appendChild(bG);
       if(sugDebo) chD.set(sugDebo);
 
-      pGasto.hidden = seg.val() !== 'gasto'; pPres.hidden = seg.val() !== 'prestamo'; pPago.hidden = seg.val() !== 'pago';
-      body.appendChild(seg.el); body.appendChild(pGasto); body.appendChild(pPres); body.appendChild(pPago);
+      mostrar(seg.val());
+      body.appendChild(seg.el); body.appendChild(pGasto); body.appendChild(pAho); body.appendChild(pPres); body.appendChild(pPago);
     }
 
     // "Sofía Astorquiza" → "Sofía A" (como sueles anotar en Deudas)
