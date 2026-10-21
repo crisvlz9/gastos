@@ -169,6 +169,13 @@
     .pnom .flbl{ margin:0 2px 6px; }
     .pat:disabled{ opacity:.4; }
     .discard{ background:none; border:0; color:var(--danger); font-size:14px; padding:14px 0 0; cursor:pointer; }
+    .item .mto.inc{ color:var(--accent); }
+    .item .seg{ margin:0 0 14px; }
+    .tpanel .flbl{ margin:0 2px 6px; }
+    .tpanel .chips{ margin:0 0 12px; }
+    .phint{ font-size:13px; color:var(--muted); margin:2px 2px 12px; line-height:1.4; }
+    .phint b{ color:var(--text); font-weight:600; }
+    .tpanel .pguardar{ margin-top:4px; }
 
     /* ===== Wizard (se abre con +) ===== */
     .wiz{
@@ -612,7 +619,7 @@
 
     <!-- PENDIENTES -->
     <section class="view" id="v-pend">
-      <div class="vhead"><h1>Por categorizar</h1></div>
+      <div class="vhead"><h1>Por revisar</h1></div>
       <div class="stack" id="plist"></div>
     </section>
 
@@ -817,6 +824,7 @@
     var cola    = LS.get('gastos_cola', []);      // gastos pendientes de enviar
     var resumen = LS.get('gastos_resumen', null); // último resumen recibido (se muestra sin señal)
     var pendientes = [];
+    var personasDeuda = []; // [{nombre, saldo}] saldo + = te debe, − = le debes (para transferencias)
 
     var MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
     var MES_C = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -1325,7 +1333,7 @@
       var n = pendientes.length;
       var bd = $('badge'); bd.textContent = n > 9 ? '9+' : n; bd.classList.toggle('on', n > 0);
       var bp = $('bPend'); bp.hidden = !n;
-      $('bPendTxt').textContent = n === 1 ? '1 gasto por categorizar' : n + ' gastos por categorizar';
+      $('bPendTxt').textContent = n === 1 ? '1 movimiento por revisar' : n + ' movimientos por revisar';
     }
     $('bPend').addEventListener('click', function(){ abierto = null; irA('v-pend'); });
 
@@ -1336,6 +1344,7 @@
         .then(function(j){
           if(!j.ok) return;
           pendientes = j.items || [];
+          personasDeuda = j.personas || [];
           actualizarBadges();
           if(vistaActual === 'v-pend') renderPendientes();
         })
@@ -1366,8 +1375,12 @@
         var head = el('div', 'ihead');
         head.innerHTML = '<div class="r1"><span class="com"></span><span class="mto"></span></div><div class="meta"></div>';
         head.querySelector('.com').textContent = it.descripcion || 'Sin descripción';
-        head.querySelector('.mto').textContent = fmtMonto(it.monto);
-        head.querySelector('.meta').textContent = fmtFecha(it.fecha) + ' · ' + (it.medio || '') + ' · ' + fmtOrigen(it.origen);
+        var mtoEl = head.querySelector('.mto');
+        mtoEl.textContent = (it.clase === 'recibida' ? '+' : '') + fmtMonto(it.monto);
+        if(it.clase === 'recibida') mtoEl.classList.add('inc');
+        head.querySelector('.meta').textContent = fmtFecha(it.fecha) + ' · ' +
+          (it.clase === 'recibida' ? 'Transferencia recibida' : it.clase === 'enviada' ? 'Transferencia enviada' : (it.medio || '')) +
+          ' · ' + fmtOrigen(it.origen);
         head.addEventListener('click', function(){
           abierto = (abierto === it.id) ? null : it.id;
           renderPendientes();
@@ -1407,18 +1420,184 @@
         pat.hidden = true;
         chk.addEventListener('change', function(){ pat.hidden = !chk.checked; if(chk.checked) pat.focus(); });
 
-        var del = el('button', 'discard', 'Descartar: duplicado o no es un gasto');
+        var del = el('button', 'discard', it.clase === 'recibida' ? 'Descartar: duplicada o ya la registré' : 'Descartar: duplicado o no es un gasto');
         del.addEventListener('click', function(){
-          if(confirm('¿Borrar "' + (it.descripcion || '') + '" por ' + fmtMonto(it.monto) + ' del Sheet?')) descartar(it, item);
+          if(confirm('¿Descartar "' + (it.descripcion || '') + '" por ' + fmtMonto(it.monto) + '? No se contará en ningún lado.')) descartar(it, item);
         });
 
-        body.appendChild(nomBox);
-        if(/cr[eé]dito/i.test(it.medio || '')){ body.appendChild(cuo.el); cuo.el.style.margin = '0 0 12px'; }
-        body.appendChild(div.el); div.el.style.margin = '0 0 12px';
-        body.appendChild(grid); body.appendChild(rec); body.appendChild(pat); body.appendChild(guardar); body.appendChild(del);
+        // Lo de siempre: categorizar como gasto
+        var pGasto = el('div');
+        pGasto.appendChild(nomBox);
+        if(/cr[eé]dito/i.test(it.medio || '')){ pGasto.appendChild(cuo.el); cuo.el.style.margin = '0 0 12px'; }
+        pGasto.appendChild(div.el); div.el.style.margin = '0 0 12px';
+        pGasto.appendChild(grid); pGasto.appendChild(rec); pGasto.appendChild(pat); pGasto.appendChild(guardar);
+
+        if(it.clase === 'recibida') armarRecibida(it, item, body);
+        else if(it.clase === 'enviada') armarEnviada(it, item, body, pGasto);
+        else body.appendChild(pGasto);
+        body.appendChild(del);
         item.appendChild(head); item.appendChild(body);
         plist.appendChild(item);
       });
+    }
+
+    /* ---------- Transferencias en Pendientes ---------- */
+
+    // Selector de opciones tipo segmento: [{k, t}] → { el, val() }
+    function segmento(opts, inicial, onChange){
+      var box = el('div', 'seg' + (opts.length === 3 ? ' tri' : '')), val = inicial;
+      opts.forEach(function(o){
+        var b = el('button', o.k === val ? 'on' : '', o.t); b.type = 'button';
+        b.addEventListener('click', function(){
+          val = o.k; box.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); });
+          onChange(val);
+        });
+        box.appendChild(b);
+      });
+      return { el: box, val: function(){ return val; } };
+    }
+
+    // Chips de personas. filtro: 1 = te deben, -1 = les debes, 0 = todas. → { el, val(), set() }
+    function chipsPersonas(filtro, sugerida, onChange){
+      var box = el('div', 'chips'), val = '';
+      var lista = personasDeuda.filter(function(p){ return !filtro || p.saldo * filtro > 0; });
+      if(sugerida && !lista.some(function(p){ return p.nombre === sugerida; })){
+        var ps = personasDeuda.filter(function(p){ return p.nombre === sugerida; })[0];
+        if(ps && !filtro) lista.unshift(ps);
+      }
+      lista.sort(function(a, b){ return (b.nombre === sugerida) - (a.nombre === sugerida); });
+      function marcar(n){
+        val = n;
+        box.querySelectorAll('.chip').forEach(function(x){ x.classList.toggle('sel', x.dataset.n === n); });
+        if(onChange) onChange(n);
+      }
+      lista.forEach(function(p){
+        var txt = p.nombre;
+        if(filtro && p.saldo) txt += ' · ' + fmtMonto(Math.abs(p.saldo));
+        var c = el('button', 'chip', txt); c.type = 'button'; c.dataset.n = p.nombre;
+        c.addEventListener('click', function(){ marcar(p.nombre); });
+        box.appendChild(c);
+      });
+      return { el: box, val: function(){ return val; }, n: lista.length, set: marcar,
+               saldo: function(n){ var p = personasDeuda.filter(function(x){ return x.nombre === n; })[0]; return p ? p.saldo : 0; } };
+    }
+
+    function saldoDe(n){ var p = personasDeuda.filter(function(x){ return x.nombre === n; })[0]; return p ? p.saldo : 0; }
+
+    function armarRecibida(it, item, body){
+      var sug = it.sugerida && saldoDe(it.sugerida) > 0 ? it.sugerida : '';
+      var pDeuda = el('div', 'tpanel'), pIng = el('div', 'tpanel');
+      var seg = segmento([{ k:'deuda', t:'Pago de deuda' }, { k:'ingreso', t:'Ingreso' }], sug || personasDeuda.some(function(p){ return p.saldo > 0; }) ? 'deuda' : 'ingreso',
+        function(v){ pDeuda.hidden = v !== 'deuda'; pIng.hidden = v !== 'ingreso'; });
+
+      // Pago de deuda
+      pDeuda.appendChild(el('label', 'flbl', '¿Quién te pagó?'));
+      var hint = el('div', 'phint');
+      var ch = chipsPersonas(1, sug, function(n){
+        var s = saldoDe(n), m = it.monto;
+        hint.innerHTML = '';
+        var t = m === s ? 'Queda en cero.' : m < s ? 'Te sigue debiendo <b>' + fmtMonto(s - m) + '</b>.'
+              : 'Queda en cero y los <b>' + fmtMonto(m - s) + '</b> de más se registran como ingreso.';
+        hint.innerHTML = 'Te debía ' + fmtMonto(s) + '. ' + t;
+        bD.disabled = false;
+      });
+      if(!ch.n) pDeuda.appendChild(el('div', 'phint', 'Nadie te debe plata ahora. Regístrala como ingreso.'));
+      pDeuda.appendChild(ch.el); pDeuda.appendChild(hint);
+      var bD = el('button', 'primary pguardar', 'Registrar pago'); bD.disabled = true;
+      bD.addEventListener('click', function(){
+        if(!ch.val()) return;
+        resolverTransf(it, item, { destino:'deuda', persona:ch.val() });
+      });
+      pDeuda.appendChild(bD);
+      if(sug) ch.set(sug);
+
+      // Ingreso
+      pIng.appendChild(el('label', 'flbl', 'Nombre'));
+      var nom = el('input', 'fld'); nom.value = it.descripcion || ''; nom.autocomplete = 'off';
+      pIng.appendChild(nom);
+      pIng.appendChild(el('label', 'flbl', 'Categoría'));
+      pIng.lastChild.style.marginTop = '12px';
+      var cats = cfg.categoriasIngreso || ['Otros ingresos'];
+      var catI = cats.indexOf('Otros ingresos') >= 0 ? 'Otros ingresos' : cats[cats.length - 1];
+      var chC = el('div', 'chips');
+      cats.forEach(function(k){
+        var c = el('button', 'chip' + (k === catI ? ' sel' : ''), k); c.type = 'button';
+        c.addEventListener('click', function(){ catI = k; chC.querySelectorAll('.chip').forEach(function(z){ z.classList.toggle('sel', z === c); }); });
+        chC.appendChild(c);
+      });
+      pIng.appendChild(chC);
+      var bI = el('button', 'primary pguardar', 'Guardar ingreso');
+      bI.addEventListener('click', function(){
+        resolverTransf(it, item, { destino:'ingreso', categoria:catI, descripcion:nom.value.trim() || it.descripcion });
+      });
+      pIng.appendChild(bI);
+
+      pDeuda.hidden = seg.val() !== 'deuda'; pIng.hidden = seg.val() !== 'ingreso';
+      body.appendChild(seg.el); body.appendChild(pDeuda); body.appendChild(pIng);
+    }
+
+    function armarEnviada(it, item, body, pGasto){
+      var sugDebo = it.sugerida && saldoDe(it.sugerida) < 0 ? it.sugerida : '';
+      var pPres = el('div', 'tpanel'), pPago = el('div', 'tpanel');
+      var seg = segmento([{ k:'gasto', t:'Gasto' }, { k:'prestamo', t:'Le presté' }, { k:'pago', t:'Pagué deuda' }],
+        sugDebo ? 'pago' : 'gasto',
+        function(v){ pGasto.hidden = v !== 'gasto'; pPres.hidden = v !== 'prestamo'; pPago.hidden = v !== 'pago'; });
+
+      // Le presté: queda "Me debe" en Deudas y no cuenta como gasto
+      pPres.appendChild(el('label', 'flbl', '¿A quién?'));
+      var per = el('input', 'fld'); per.value = it.sugerida || nombreCorto(it.persona); per.autocomplete = 'off'; per.autocapitalize = 'words';
+      pPres.appendChild(per);
+      var chP = chipsPersonas(0, it.sugerida, function(n){ per.value = n; });
+      chP.el.style.marginTop = '8px';
+      if(chP.n) pPres.appendChild(chP.el);
+      pPres.appendChild(el('div', 'phint', 'Queda en Deudas como “me debe” y no cuenta como gasto.'));
+      var bP = el('button', 'primary pguardar', 'Registrar préstamo');
+      bP.addEventListener('click', function(){
+        var n = per.value.trim(); if(!n){ alert('Escribe a quién le prestaste.'); return; }
+        resolverTransf(it, item, { destino:'prestamo', persona:n });
+      });
+      pPres.appendChild(bP);
+
+      // Pagué lo que debía
+      pPago.appendChild(el('label', 'flbl', '¿A quién le pagaste?'));
+      var hint = el('div', 'phint');
+      var chD = chipsPersonas(-1, sugDebo, function(n){
+        var s = -saldoDe(n), m = it.monto;
+        hint.innerHTML = 'Le debías ' + fmtMonto(s) + '. ' + (m === s ? 'Queda en cero.' : m < s ? 'Le sigues debiendo <b>' + fmtMonto(s - m) + '</b>.'
+              : 'Queda en cero y los <b>' + fmtMonto(m - s) + '</b> de más quedan como que te debe.');
+        bG.disabled = false;
+      });
+      if(!chD.n) pPago.appendChild(el('div', 'phint', 'No le debes plata a nadie ahora.'));
+      pPago.appendChild(chD.el); pPago.appendChild(hint);
+      var bG = el('button', 'primary pguardar', 'Registrar pago'); bG.disabled = true;
+      bG.addEventListener('click', function(){
+        if(!chD.val()) return;
+        resolverTransf(it, item, { destino:'pagodeuda', persona:chD.val() });
+      });
+      pPago.appendChild(bG);
+      if(sugDebo) chD.set(sugDebo);
+
+      pGasto.hidden = seg.val() !== 'gasto'; pPres.hidden = seg.val() !== 'prestamo'; pPago.hidden = seg.val() !== 'pago';
+      body.appendChild(seg.el); body.appendChild(pGasto); body.appendChild(pPres); body.appendChild(pPago);
+    }
+
+    // "Sofía Astorquiza" → "Sofía A" (como sueles anotar en Deudas)
+    function nombreCorto(n){
+      var p = String(n || '').trim().split(/\s+/);
+      if(p.length < 2) return p[0] || '';
+      var a = p[0].charAt(0) + p[0].slice(1).toLowerCase();
+      return a + ' ' + p[p.length > 3 ? p.length - 2 : 1].charAt(0).toUpperCase();
+    }
+
+    function resolverTransf(it, item, datos){
+      item.classList.add('busy');
+      postAccion(Object.assign({ action:'resolver_transf', id:it.id }, datos))
+        .then(function(j){
+          if(!j.ok){ item.classList.remove('busy'); alert('No se pudo guardar: ' + j.error); return; }
+          quitarPendiente(it);
+          cargarPendientes(); cargarDeudas(); cargarResumen(); cargarPresupuesto();
+        })
+        .catch(function(){ item.classList.remove('busy'); alert('Sin conexión. Intenta de nuevo.'); });
     }
 
     function postAccion(payload){
