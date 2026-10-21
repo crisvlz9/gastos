@@ -153,6 +153,7 @@
     .item .com{ font-size:16px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .item .mto{ font-size:17px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
     .item .meta{ font-size:13px; color:var(--muted); margin-top:4px; }
+    .item .meta .borr{ color:var(--accent); }
     .item .ibody{ display:none; padding:0 16px 16px; }
     .item.open{ border-color:var(--accent); }
     .item.open .ibody{ display:block; }
@@ -1327,6 +1328,7 @@
        ===================================================== */
     var plist = $('plist');
     var abierto = null; // id del ítem expandido
+    var pnodos = {};    // id → { el, sig }: tarjetas de Pendientes ya construidas (conservan lo que llenaste)
     var cobro = null;   // { texto, link } después de dividir entre varias personas
 
     function actualizarBadges(){
@@ -1366,11 +1368,32 @@
         cb.appendChild(a); cb.appendChild(x); plist.appendChild(cb);
       }
       if(!pendientes.length){
+        pnodos = {};
         plist.appendChild(el('div', 'empty', 'Todo categorizado.'));
         return;
       }
+      // Cada pendiente se construye una sola vez y se reutiliza: refrescar la lista (al volver a la app,
+      // al guardar otro, al cerrar el encabezado) ya no borra lo que estabas llenando.
+      var vivos = {};
       pendientes.forEach(function(it){
-        var item = el('div', 'item' + (abierto === it.id ? ' open' : ''));
+        var sig = JSON.stringify(it) + (it.clase && it.clase !== 'gasto' ? JSON.stringify(personasDeuda) : '');
+        var n = pnodos[it.id];
+        if(!n || (n.sig !== sig && abierto !== it.id)) n = pnodos[it.id] = { el: construirPendiente(it), sig: sig };
+        n.el.classList.toggle('open', abierto === it.id);
+        var b = n.el.querySelector('.meta .borr');
+        if(b) b.textContent = hayBorrador(it.id) ? ' · división sin guardar' : '';
+        vivos[it.id] = 1;
+        plist.appendChild(n.el);
+      });
+      Object.keys(pnodos).forEach(function(k){ if(!vivos[k]) delete pnodos[k]; });
+    }
+
+    function pintarAbiertos(){
+      Object.keys(pnodos).forEach(function(k){ pnodos[k].el.classList.toggle('open', abierto === k); });
+    }
+
+    function construirPendiente(it){
+        var item = el('div', 'item');
 
         var head = el('div', 'ihead');
         head.innerHTML = '<div class="r1"><span class="com"></span><span class="mto"></span></div><div class="meta"></div>';
@@ -1381,9 +1404,10 @@
         head.querySelector('.meta').textContent = fmtFecha(it.fecha) + ' · ' +
           (it.clase === 'recibida' ? 'Transferencia recibida' : it.clase === 'enviada' ? 'Transferencia enviada' : (it.medio || '')) +
           ' · ' + fmtOrigen(it.origen);
+        head.querySelector('.meta').appendChild(el('span', 'borr'));
         head.addEventListener('click', function(){
           abierto = (abierto === it.id) ? null : it.id;
-          renderPendientes();
+          pintarAbiertos();
         });
 
         var body = el('div', 'ibody');
@@ -1396,7 +1420,7 @@
         nomBox.appendChild(el('label', 'flbl', 'Nombre del gasto'));
         var nom = el('input', 'fld'); nom.value = it.descripcion || ''; nom.autocomplete = 'off'; nom.autocapitalize = 'sentences';
         nomBox.appendChild(nom);
-        var div = crearDivision(); div.setTotal(it.monto);
+        var div = crearDivision(it.id); div.setTotal(it.monto);
         var cuo = crearCuotas();
         var catSel = '';
         var guardar = el('button', 'primary pguardar', 'Elige una categoría'); guardar.disabled = true;
@@ -1437,8 +1461,7 @@
         else body.appendChild(pGasto);
         body.appendChild(del);
         item.appendChild(head); item.appendChild(body);
-        plist.appendChild(item);
-      });
+        return item;
     }
 
     /* ---------- Transferencias en Pendientes ---------- */
@@ -1627,6 +1650,7 @@
 
     function quitarPendiente(it){
       abierto = null;
+      borrarBorrador(it.id); delete pnodos[it.id];
       pendientes = pendientes.filter(function(x){ return x.id !== it.id; });
       renderPendientes(); actualizarBadges();
     }
@@ -2395,7 +2419,21 @@
      * Modos: 'con' = partes iguales contándote · 'sin' = partes iguales sin ti · 'manual' = montos distintos.
      * get() devuelve null o [{persona, monto}, …].
      */
-    function crearDivision(){
+    /* Borradores de división por pendiente: sobreviven aunque Android cierre la app al ir a WhatsApp. */
+    var BORR_KEY = 'gastos_borr_div';
+    function leerBorradores(){
+      var b = LS.get(BORR_KEY, {}) || {}, ahora = Date.now(), cambio = false;
+      Object.keys(b).forEach(function(k){ if(!b[k] || ahora - b[k].t > 7 * 864e5){ delete b[k]; cambio = true; } }); // 7 días
+      if(cambio) LS.set(BORR_KEY, b);
+      return b;
+    }
+    function hayBorrador(id){ var b = leerBorradores()[id]; return !!(b && b.gente && b.gente.length); }
+    function borrarBorrador(id){
+      if(!id) return;
+      var b = leerBorradores(); if(b[id]){ delete b[id]; LS.set(BORR_KEY, b); }
+    }
+
+    function crearDivision(idBorr){
       var total = 0, activo = false, modo = 'con', gente = []; // gente: [{persona, monto, inp}]
       var w = el('div', 'split');
       var tog = el('button', 'tog', '+ Dividir el gasto');
@@ -2419,6 +2457,15 @@
       w.appendChild(tog); w.appendChild(body);
 
       function pintarSeg(){ seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.m === modo); }); }
+      function guardarBorr(){
+        if(!idBorr) return;
+        var b = leerBorradores();
+        if(activo && gente.length) b[idBorr] = { t:Date.now(), modo:modo, gente:gente.map(function(g){ return { persona:g.persona, monto:g.monto }; }) };
+        else delete b[idBorr];
+        LS.set(BORR_KEY, b);
+        var tarjeta = pnodos[idBorr] && pnodos[idBorr].el.querySelector('.meta .borr');
+        if(tarjeta) tarjeta.textContent = b[idBorr] ? ' · división sin guardar' : '';
+      }
       function pintarChips(){
         chips.innerHTML = '';
         personasFrecuentes(8).forEach(function(n){
@@ -2464,6 +2511,7 @@
         });
       }
       function actualizar(){
+        guardarBorr();
         var deben = gente.reduce(function(a, g){ return a + g.monto; }, 0);
         hint.innerHTML = '';
         if(!gente.length){ hint.textContent = 'Toca los nombres o escribe uno nuevo.'; return; }
@@ -2487,7 +2535,7 @@
       var api = {
         el: w,
         setTotal: function(t){ total = Number(t) || 0; repartir(); },
-        reset: function(){ activo = false; modo = 'con'; gente = []; tog.hidden = false; body.hidden = true; per.value = ''; lista.innerHTML = ''; },
+        reset: function(){ activo = false; modo = 'con'; gente = []; tog.hidden = false; body.hidden = true; per.value = ''; lista.innerHTML = ''; guardarBorr(); },
         get: function(){
           if(!activo) return null;
           var pend = per.value.trim(); if(pend){ agregar(pend); per.value = ''; } // nombre escrito sin tocar "Agregar"
@@ -2498,6 +2546,15 @@
           return gente.map(function(g){ return { persona:g.persona, monto:g.monto }; });
         }
       };
+
+      // Retoma lo que habías dejado a medias en este pendiente
+      var prev = idBorr && leerBorradores()[idBorr];
+      if(prev && prev.gente && prev.gente.length){
+        activo = true; tog.hidden = true; body.hidden = false;
+        modo = prev.modo || 'con';
+        gente = prev.gente.map(function(g){ return { persona:g.persona, monto:Number(g.monto) || 0 }; });
+        pintarSeg(); pintarLista(); pintarChips(); actualizar();
+      }
       return api;
     }
 
