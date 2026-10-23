@@ -177,6 +177,20 @@
     .phint{ font-size:13px; color:var(--muted); margin:2px 2px 12px; line-height:1.4; }
     .phint b{ color:var(--text); font-weight:600; }
     .tpanel .pguardar{ margin-top:4px; }
+    .ritems{ margin:0 0 12px; border-top:1px solid var(--line); }
+    .ritems .rlbl{ font-size:13px; color:var(--muted); margin:10px 2px 4px; }
+    .ritem{ display:flex; align-items:center; gap:10px; width:100%; background:none; border:0; border-bottom:1px solid var(--line);
+      padding:10px 2px; color:var(--text); text-align:left; cursor:pointer; font:inherit; }
+    .ritem .rn{ flex:1; min-width:0; }
+    .ritem .rn b{ display:block; font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ritem .rn span{ font-size:12px; color:var(--muted); }
+    .ritem .rm{ font-family:'JetBrains Mono', monospace; font-size:13px; white-space:nowrap; }
+    .ritem .rt{ font-size:11.5px; font-weight:700; border-radius:10px; padding:3px 8px; white-space:nowrap; background:var(--card-3, #2a2a31); color:var(--muted); }
+    .ritem .rt.ok{ background:var(--accent-dim); color:var(--accent); }
+    .ritem .rt.parcial{ background:#3a2a18; color:#FF8A3D; }
+    .ritem .rp{ width:22px; height:22px; flex:none; border-radius:50%; border:1.5px solid var(--line); font-size:11px; font-weight:700;
+      display:flex; align-items:center; justify-content:center; color:var(--muted); }
+    .ritem .rp.on{ background:var(--accent); border-color:var(--accent); color:var(--ink, #111); }
 
     /* ===== Wizard (se abre con +) ===== */
     .wiz{
@@ -1507,6 +1521,64 @@
 
     function saldoDe(n){ var p = personasDeuda.filter(function(x){ return x.nombre === n; })[0]; return p ? p.saldo : 0; }
 
+    /**
+     * Reparto de un pago por transferencia entre los ítems pendientes de una persona (mismo cálculo que
+     * registrarPagoDeuda_ en Codigo.gs): primero los que toques, después de más antiguo a más nuevo.
+     * signo 1 = te pagan lo que te deben; -1 = pagas lo que debes.
+     */
+    function repartoItems(signo, monto){
+      var box = el('div', 'ritems'), persona = '', prioridad = [];
+      box.hidden = true;
+      function pendientesDe(n){
+        return deudas.filter(function(x){ return (x.estado || 'Pendiente') === 'Pendiente' && clave(x.persona) === clave(n); });
+      }
+      function orden(items){
+        return items.slice().sort(function(a, b){
+          var pa = prioridad.indexOf(a.id), pb = prioridad.indexOf(b.id);
+          pa = pa < 0 ? 1e9 : pa; pb = pb < 0 ? 1e9 : pb;
+          return pa - pb || String(a.fecha).localeCompare(String(b.fecha));
+        });
+      }
+      function pintar(){
+        box.innerHTML = '';
+        var pend = pendientesDe(persona);
+        var items = orden(pend.filter(function(x){ return SIGNO[x.tipo] === signo; }));
+        if(!persona || items.length < 1){ box.hidden = true; return; }
+        box.hidden = false;
+        var saldo = pend.reduce(function(a, x){ return a + SIGNO[x.tipo] * Number(x.monto); }, 0) * signo;
+        var credito = pend.filter(function(x){ return SIGNO[x.tipo] !== signo; }).reduce(function(a, x){ return a + Number(x.monto); }, 0);
+        var disp = Math.min(monto, Math.max(saldo, 0)) + credito;
+        box.appendChild(el('div', 'rlbl', items.length > 1 ? 'Se paga en este orden · toca un ítem para pagarlo primero'
+                                                          : 'Ítem que se paga'));
+        items.forEach(function(x){
+          var m = Number(x.monto), cubre = Math.max(0, Math.min(disp, m)); disp -= cubre;
+          var b = el('button', 'ritem'); b.type = 'button';
+          var k = prioridad.indexOf(x.id);
+          var pr = el('span', 'rp' + (k >= 0 ? ' on' : ''), k >= 0 ? String(k + 1) : '');
+          var nm = el('span', 'rn'); nm.appendChild(el('b', '', x.detalle || x.tipo)); nm.appendChild(el('span', '', fmtFecha(x.fecha)));
+          b.appendChild(pr); b.appendChild(nm); b.appendChild(el('span', 'rm', fmtMonto(m)));
+          b.appendChild(cubre >= m ? el('span', 'rt ok', 'Pagado')
+                      : cubre > 0 ? el('span', 'rt parcial', 'Queda ' + fmtMonto(m - cubre))
+                      : el('span', 'rt', 'Pendiente'));
+          b.addEventListener('click', function(){
+            var i = prioridad.indexOf(x.id);
+            if(i >= 0) prioridad.splice(i, 1); else prioridad.push(x.id);
+            pintar();
+          });
+          box.appendChild(b);
+        });
+        if(credito) box.appendChild(el('div', 'phint', 'Incluye ' + fmtMonto(credito) + ' que ya estaba a cuenta (abonos anteriores o lo que ' + (signo > 0 ? 'le debías' : 'te debía') + ').'));
+      }
+      return {
+        el: box,
+        set: function(n){ if(clave(n) !== clave(persona)) prioridad = []; persona = n; pintar(); },
+        orden: function(){
+          var items = orden(pendientesDe(persona).filter(function(x){ return SIGNO[x.tipo] === signo; }));
+          return items.map(function(x){ return x.id; });
+        }
+      };
+    }
+
     function armarRecibida(it, item, body){
       var sug = it.sugerida && saldoDe(it.sugerida) > 0 ? it.sugerida : '';
       var pDeuda = el('div', 'tpanel'), pIng = el('div', 'tpanel');
@@ -1516,7 +1588,9 @@
       // Pago de deuda
       pDeuda.appendChild(el('label', 'flbl', '¿Quién te pagó?'));
       var hint = el('div', 'phint');
+      var repD = repartoItems(1, it.monto);
       var ch = chipsPersonas(1, sug, function(n){
+        repD.set(n);
         var s = saldoDe(n), m = it.monto;
         hint.innerHTML = '';
         var t = m === s ? 'Queda en cero.' : m < s ? 'Te sigue debiendo <b>' + fmtMonto(s - m) + '</b>.'
@@ -1525,11 +1599,11 @@
         bD.disabled = false;
       });
       if(!ch.n) pDeuda.appendChild(el('div', 'phint', 'Nadie te debe plata ahora. Regístrala como ingreso.'));
-      pDeuda.appendChild(ch.el); pDeuda.appendChild(hint);
+      pDeuda.appendChild(ch.el); pDeuda.appendChild(hint); pDeuda.appendChild(repD.el);
       var bD = el('button', 'primary pguardar', 'Registrar pago'); bD.disabled = true;
       bD.addEventListener('click', function(){
         if(!ch.val()) return;
-        resolverTransf(it, item, { destino:'deuda', persona:ch.val() });
+        resolverTransf(it, item, { destino:'deuda', persona:ch.val(), items:repD.orden() });
       });
       pDeuda.appendChild(bD);
       if(sug) ch.set(sug);
@@ -1601,18 +1675,20 @@
       // Pagué lo que debía
       pPago.appendChild(el('label', 'flbl', '¿A quién le pagaste?'));
       var hint = el('div', 'phint');
+      var repP = repartoItems(-1, it.monto);
       var chD = chipsPersonas(-1, sugDebo, function(n){
+        repP.set(n);
         var s = -saldoDe(n), m = it.monto;
         hint.innerHTML = 'Le debías ' + fmtMonto(s) + '. ' + (m === s ? 'Queda en cero.' : m < s ? 'Le sigues debiendo <b>' + fmtMonto(s - m) + '</b>.'
               : 'Queda en cero y los <b>' + fmtMonto(m - s) + '</b> de más quedan como que te debe.');
         bG.disabled = false;
       });
       if(!chD.n) pPago.appendChild(el('div', 'phint', 'No le debes plata a nadie ahora.'));
-      pPago.appendChild(chD.el); pPago.appendChild(hint);
+      pPago.appendChild(chD.el); pPago.appendChild(hint); pPago.appendChild(repP.el);
       var bG = el('button', 'primary pguardar', 'Registrar pago'); bG.disabled = true;
       bG.addEventListener('click', function(){
         if(!chD.val()) return;
-        resolverTransf(it, item, { destino:'pagodeuda', persona:chD.val() });
+        resolverTransf(it, item, { destino:'pagodeuda', persona:chD.val(), items:repP.orden() });
       });
       pPago.appendChild(bG);
       if(sugDebo) chD.set(sugDebo);
