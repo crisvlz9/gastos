@@ -782,6 +782,7 @@
       <label class="flbl">Medio de pago</label>
       <div class="chips" id="egMedios" style="margin-top:0"></div>
     </div>
+    <div id="egSplit" style="margin-top:16px"></div>
     <label class="flbl">Categoría</label>
     <div class="opts cats" id="egCats"></div>
     <div class="msg" id="egMsg"></div>
@@ -1245,10 +1246,21 @@
       $('egDel').textContent = enCuotas ? 'Eliminar compra (las ' + u.cuotas + ' cuotas)' : 'Eliminar ' + tipo.toLowerCase();
       $('egMsg').textContent = '';
       $('egSave').disabled = false; $('egSave').textContent = 'Guardar cambios';
+      // Dividir un gasto ya guardado (ej. lo categorizó una regla y no alcanzaste a dividirlo en Pendientes)
+      egListo = false; $('egMsg').style.color = '';
+      var sp = $('egSplit'); sp.innerHTML = '';
+      egDiv = null;
+      if(tipo === 'Gasto' && !dividido && !u.cola){
+        egDiv = crearDivision('eg-' + u.id);
+        egDiv.setTotal(enCuotas ? Number(u.bruto || u.monto) * Number(u.cuotas) : (u.bruto || u.monto));
+        sp.appendChild(egDiv.el);
+      }
       pintarEgOpciones();
       $('eg').classList.add('show'); $('eg').scrollTop = 0;
       history.pushState({ capa:'eg' }, '');
     }
+    var egDiv = null, egListo = false; // egListo: el botón Guardar quedó como "Listo" tras dividir
+    $('egMonto').addEventListener('input', function(){ if(egDiv) egDiv.setTotal(Number($('egMonto').value.replace(/\D/g, ''))); });
     function cerrarEg(desdeAtras){
       $('eg').classList.remove('show');
       if(!desdeAtras && history.state && history.state.capa === 'eg') volverHistorial();
@@ -1288,12 +1300,16 @@
     $('egFecha').addEventListener('change', function(){ if(egMov && egMov.tipo === 'Ingreso') pintarEgOpciones(); });
     $('egClose').addEventListener('click', function(){ cerrarEg(); });
     $('egSave').addEventListener('click', function(){
+      if(egListo){ egListo = false; trasEditar(); return; }
       var u = egMov; if(!u) return;
       var desc = $('egDesc').value.trim(), monto = Number($('egMonto').value.replace(/\D/g, ''));
       if(!desc){ $('egMsg').textContent = 'Falta la descripción.'; return; }
       if(!monto){ $('egMsg').textContent = 'Falta el monto.'; return; }
+      var division = null;
+      if(egDiv){ try{ division = egDiv.get(); }catch(e){ $('egMsg').textContent = e.message; return; } }
       var b = $('egSave'); b.disabled = true; b.textContent = 'Guardando…'; $('egMsg').textContent = '';
       var payload = { action:'editar', id:u.id, descripcion:desc, categoria:egCat, fecha:$('egFecha').value || u.fecha };
+      if(division) payload.division = division;
       if(esGasto(u)) payload.medio = egMedio;
       if(u.tipo === 'Ingreso'){
         // si cambió la fecha, el mes elegido debe seguir siendo el de la fecha o el siguiente
@@ -1306,6 +1322,8 @@
         .then(function(j){
           b.disabled = false; b.textContent = 'Guardar cambios';
           if(!j.ok){ $('egMsg').textContent = errorServidor(j, 'No se pudo guardar.'); return; }
+          if(division && !j.dividido){ $('egMsg').textContent = 'Se guardó, pero el servidor no creó la división: falta crear una "Nueva versión" de Codigo.gs.'; return; }
+          borrarBorrador('eg-' + u.id);
           // Se refleja al tiro; la recarga lo confirma
           var suf = (String(u.descripcion || '').match(SUF_CUOTA) || [''])[0];
           u.descripcion = desc + suf; u.categoria = egCat; u.fecha = payload.fecha;
@@ -1313,7 +1331,21 @@
           if(payload.mes) u.mes = payload.mes;
           if(payload.monto){ u.monto = payload.monto; u.bruto = payload.monto; }
           if(resumen) LS.set('gastos_resumen', resumen);
-          renderInicio(); trasEditar();
+          renderInicio();
+          if(division && division.length > 1){
+            // Se queda abierto para mandar el cobro al grupo
+            var m = $('egMsg'); m.innerHTML = ''; m.style.color = 'var(--text)';
+            m.appendChild(el('div', '', division.length + ' personas te deben ' + fmtMonto(totalDivision(division)) + '.'));
+            var a = el('a', 'primary', 'Cobrar por WhatsApp');
+            a.href = linkWhatsApp(mensajeCobro(desc, Number(u.bruto || u.monto), division)); a.target = '_blank'; a.rel = 'noopener';
+            a.style.cssText = 'display:block;text-align:center;text-decoration:none;margin-top:10px;padding:16px;border-radius:24px;' +
+                              'background:var(--good);color:var(--ink);font-weight:700';
+            m.appendChild(a);
+            b.textContent = 'Listo'; egListo = true;
+            $('egSplit').innerHTML = ''; egDiv = null;
+            return;
+          }
+          trasEditar();
         })
         .catch(function(){ b.disabled = false; b.textContent = 'Guardar cambios'; $('egMsg').textContent = 'Sin conexión. Intenta de nuevo.'; });
     });
