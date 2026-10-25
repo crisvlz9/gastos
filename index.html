@@ -2669,12 +2669,16 @@
     /** Sugerencia para la regla: el nombre del comercio sin números ni sucursal. "JUMBO LAS CONDES" → "JUMBO". */
     function patronSugerido(desc){
       var STOP = { LAS:1, LOS:1, LA:1, EL:1, DE:1, DEL:1, Y:1, SAN:1, EN:1, PARQUE:1, PLAZA:1, MALL:1, ALTO:1, PORTAL:1, COSTANERA:1, OUTLET:1 };
-      var w = String(desc || '').toUpperCase()
+      var t = String(desc || '').toUpperCase()
         .replace(/^(MERPAGO|MERCADOPAGO|MP|DLO|DL|PAYU|FLOW|KHIPU|SUMUP)\s*\*\s*/, '')
         .replace(/[*#]/g, ' ').split(/\s+/)
-        .filter(function(t){ return t && !/\d/.test(t); });
-      if(!w.length) return String(desc || '').toUpperCase().trim();
-      return (w[1] && !STOP[w[1]] && w[0].length < 6) ? w[0] + ' ' + w[1] : w[0];
+        .map(function(x){ return x.replace(/^([A-ZÑ]{3,})\d[\w]*$/, '$1'); }); // "CABIFY2642A2I" → "CABIFY"
+      // palabra útil = sin números y con letras ("CAE 11/240 · traspaso…" → "CAE", no "CAE ·")
+      var util = function(x){ return x && !/\d/.test(x) && /[A-ZÑÁÉÍÓÚ]/.test(x); };
+      var i = 0; while(i < t.length && !util(t[i])) i++;
+      if(i >= t.length) return String(desc || '').toUpperCase().trim();
+      // la 2ª palabra solo si va pegada a la 1ª en el texto original (si no, la regla no calzaría)
+      return (util(t[i + 1]) && !STOP[t[i + 1]] && t[i].length < 6) ? t[i] + ' ' + t[i + 1] : t[i];
     }
 
     /* =====================================================
