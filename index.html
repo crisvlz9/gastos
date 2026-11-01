@@ -8,6 +8,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <title>Gastos</title>
+  <script>
+    // Tema: 'noche' (por defecto), 'dia' o 'auto' (sigue al teléfono). Se aplica antes de pintar para que no parpadee.
+    (function(){
+      var t = 'noche'; try{ t = JSON.parse(localStorage.getItem('gastos_tema')) || 'noche'; }catch(e){}
+      var claro = t === 'dia' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
+      document.documentElement.setAttribute('data-theme', claro ? 'light' : 'dark');
+    })();
+  </script>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -23,9 +31,27 @@
                                         /* ahorro */
       --hero:#5B3DF5; --hero-soft:#7C64F8; --hero-2:#E3DDFF; --link:#B8A9FF;
       --danger:#FF6B6B; --warn:#FFD66B; --warn-bg:#24200F; --warn-line:#3A3318;
+      --sel:#36363F; --track:#2A2A30; --card-cat:#18181C; --shadow:rgba(0,0,0,.45);
+      --accent-text:#FFD66B; --good-fill:#A6E39A; --on-hero:#FFFFFF;
       --font:'Space Grotesk', system-ui, sans-serif;
       --mono:'JetBrains Mono', ui-monospace, monospace;
     }
+    /* Tema "Bloques claro" (modo día): mismos bloques de color, fondo cálido y textos con contraste */
+    :root[data-theme="light"]{
+      --bg:#F4F3EF; --card:#FFFFFF; --card-2:#ECEBE6; --card-3:#E6E4DE; --line:#E2E0D9; --line-2:#CBC8BF; --nav:#FFFFFF;
+      --text:#17171B; --muted:#6A6A73; --ink:#111111;
+      --accent:#FFD15C; --accent-dim:#FFF3CC; --accent-text:#8A6300;
+      --good:#2E8540; --good-dim:#E5F4E1; --good-line:#BFE0B8; --good-fill:#A6E39A;
+      --over:#C4442E; --over-dim:#FCE8E3; --over-line:#F1C4B9;
+      --sav:#3A63C9; --pace:#D2600F;
+      --hero:#5B3DF5; --hero-soft:#7C64F8; --hero-2:#E3DDFF; --link:#5B3DF5;
+      --danger:#D63B3B; --warn:#8A6300; --warn-bg:#FFF3CC; --warn-line:#F0DC9C;
+      --sel:#E2E0DA; --track:#E6E4DE; --card-cat:#FFFFFF; --shadow:rgba(40,35,20,.14);
+    }
+    :root[data-theme="light"] .tile .nm{ color:color-mix(in srgb, var(--c) 52%, #000); }
+    :root[data-theme="light"] .opt.cat{ border-color:var(--line); }
+    :root[data-theme="light"] .setup input, :root[data-theme="light"] .fld, :root[data-theme="light"] .pat{ background:var(--card); }
+    :root[data-theme="light"] .mdet{ background:var(--card-2); }
     *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
     html,body{margin:0; height:100%;}
     body{
@@ -153,7 +179,7 @@
     .item .com{ font-size:16px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .item .mto{ font-size:17px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
     .item .meta{ font-size:13px; color:var(--muted); margin-top:4px; }
-    .item .meta .borr{ color:var(--accent); }
+    .item .meta .borr{ color:var(--accent-text); }
     .item .ibody{ display:none; padding:0 16px 16px; }
     .item.open{ border-color:var(--accent); }
     .item.open .ibody{ display:block; }
@@ -170,7 +196,7 @@
     .pnom .flbl{ margin:0 2px 6px; }
     .pat:disabled{ opacity:.4; }
     .discard{ background:none; border:0; color:var(--danger); font-size:14px; padding:14px 0 0; cursor:pointer; }
-    .item .mto.inc{ color:var(--accent); }
+    .item .mto.inc{ color:var(--good); }
     .item .seg{ margin:0 0 14px; }
     .tpanel .flbl{ margin:0 2px 6px; }
     .tpanel .chips{ margin:0 0 12px; }
@@ -185,9 +211,9 @@
     .ritem .rn b{ display:block; font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .ritem .rn span{ font-size:12px; color:var(--muted); }
     .ritem .rm{ font-family:'JetBrains Mono', monospace; font-size:13px; white-space:nowrap; }
-    .ritem .rt{ font-size:11.5px; font-weight:700; border-radius:10px; padding:3px 8px; white-space:nowrap; background:var(--card-3, #2a2a31); color:var(--muted); }
-    .ritem .rt.ok{ background:var(--accent-dim); color:var(--accent); }
-    .ritem .rt.parcial{ background:#3a2a18; color:#FF8A3D; }
+    .ritem .rt{ font-size:11.5px; font-weight:700; border-radius:10px; padding:3px 8px; white-space:nowrap; background:var(--card-3); color:var(--muted); }
+    .ritem .rt.ok{ background:var(--good-dim); color:var(--good); }
+    .ritem .rt.parcial{ background:color-mix(in srgb, var(--pace) 16%, var(--card)); color:var(--pace); }
     .ritem .rp{ width:22px; height:22px; flex:none; border-radius:50%; border:1.5px solid var(--line); font-size:11px; font-weight:700;
       display:flex; align-items:center; justify-content:center; color:var(--muted); }
     .ritem .rp.on{ background:var(--accent); border-color:var(--accent); color:var(--ink, #111); }
@@ -308,7 +334,7 @@
     .setup input:focus{ border-color:var(--accent); }
     .setup .msg{ font-size:14px; margin-top:16px; min-height:20px; }
     .setup .msg.err{ color:var(--danger); }
-    .setup .msg.ok{ color:var(--accent); }
+    .setup .msg.ok{ color:var(--good); }
     .setup .grow{ flex:1; }
     .setup .cancel{ background:none; border:0; color:var(--muted); font-size:15px; padding:14px; width:100%; margin-top:6px; }
 
@@ -457,7 +483,7 @@
     .card.hero .bar{ background:var(--hero-soft); }
     .card.hero .bar b{ background:#fff; opacity:.9; }
     .hero-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
-    .pill{ background:var(--bg); color:#fff; border-radius:14px; padding:6px 10px; font-size:12px; font-weight:700; white-space:nowrap; }
+    .pill{ background:rgba(0,0,0,.28); color:#fff; border-radius:14px; padding:6px 10px; font-size:12px; font-weight:700; white-space:nowrap; }
     .pill[hidden]{ display:none; }
     .segbar{ display:grid; grid-template-columns:repeat(20, minmax(0,1fr)); gap:3px; margin:16px 0 10px; }
     .segbar span{ height:14px; border-radius:2px; background:var(--hero-soft); }
@@ -483,7 +509,7 @@
     .tile .nm{ font-size:13px; font-weight:700; color:var(--c); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .tile .amt{ font-size:20px; font-weight:700; line-height:1.05; }
     .tile .pc{ font-size:12px; color:var(--muted); }
-    .tag-over{ background:var(--text); color:var(--ink); border-radius:10px; padding:3px 8px; font-size:11px; font-weight:700; }
+    .tag-over{ background:var(--text); color:var(--bg); border-radius:10px; padding:3px 8px; font-size:11px; font-weight:700; }
 
     /* Ícono de categoría: círculo de color con ícono oscuro */
     .cic{ width:36px; height:36px; border-radius:50%; }
@@ -504,12 +530,12 @@
       max-width:448px; margin:0 auto; height:68px; padding:0 6px; z-index:10;
       background:var(--nav); border:1px solid var(--line); border-radius:34px;
       display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); align-items:center;
-      box-shadow:0 10px 30px rgba(0,0,0,.45);
+      box-shadow:0 10px 30px var(--shadow);
     }
     .tab{ font-size:0; gap:0; padding:0; min-height:48px; justify-content:center; color:var(--muted); }
     .tab .ti{ width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
-    .tab.on{ color:#fff; }
-    .tab.on .ti{ background:#36363F; }
+    .tab.on{ color:var(--text); }
+    .tab.on .ti{ background:var(--sel); }
     .badge{ top:2px; left:calc(50% + 8px); background:var(--accent); color:var(--ink); }
     .fab{ width:52px; height:52px; margin:0; border:0; background:var(--accent); color:var(--ink); }
     .fab svg.i{ width:24px; height:24px; stroke-width:2.6; }
@@ -526,7 +552,7 @@
     .opt{ border:0; background:var(--card); border-radius:18px; }
     .opt.sel{ background:var(--accent); color:var(--ink); font-weight:700; }
     .opt.cat{
-      --c:#C4C4CC; border:2px solid var(--card-2); background:#18181C; color:var(--text);
+      --c:#C4C4CC; border:2px solid var(--card-2); background:var(--card-cat); color:var(--text);
       border-radius:20px; min-height:92px; gap:8px; font-weight:600;
     }
     .opt.cat span.cic{ display:flex; max-width:none; overflow:visible; -webkit-line-clamp:unset; }
@@ -542,7 +568,7 @@
     /* Selectores, chips y campos */
     .seg{ border:0; background:var(--card); border-radius:18px; }
     .seg button{ border-radius:14px; }
-    .seg button.on{ background:#36363F; color:var(--text); font-weight:700; }
+    .seg button.on{ background:var(--sel); color:var(--text); font-weight:700; }
     .seg.neg button.on{ background:var(--over-dim); color:var(--over); }
     .chip{ border:0; background:var(--card-3); border-radius:16px; min-height:36px; }
     .chip.sel{ background:var(--accent); color:var(--ink); font-weight:700; }
@@ -562,7 +588,7 @@
     .split .tog{ border-color:var(--line-2); border-radius:16px; }
     .split .body{ border-color:var(--line-2); border-radius:18px; }
     .cobro{ border:1px solid var(--good-line); background:var(--good-dim); color:var(--text); border-radius:18px; }
-    .cobro a{ background:var(--good); color:var(--ink); border-radius:14px; }
+    .cobro a{ background:var(--good-fill); color:var(--ink); border-radius:14px; }
     .cobro button{ color:var(--muted); }
 
     /* Detalle de movimiento */
@@ -574,7 +600,7 @@
     .st-p{ color:var(--pace); }
     .mov .a.sav, .ingrow .sav{ color:var(--sav); }
     .st-y, .catrow.nocat .r, .mov .m .tag, .mov .m .q, .mdet .f .w{ color:var(--warn); }
-    .bar{ background:#2A2A30; }
+    .bar{ background:var(--track); }
     .bar b{ background:var(--text); }
 
     /* Deudas */
@@ -810,6 +836,15 @@
 
   <!-- ================= CONFIGURACIÓN ================= -->
   <div class="setup" id="setup">
+    <div id="temaBox">
+      <div class="q">Ajustes</div>
+      <label>Apariencia</label>
+      <div class="seg tri" id="temaSeg">
+        <button data-t="noche">Noche</button><button data-t="dia">Día</button><button data-t="auto">Automático</button>
+      </div>
+      <div class="q-sub" id="temaAyuda" style="margin-top:8px"></div>
+      <div style="height:1px;background:var(--line);margin:24px 0 20px"></div>
+    </div>
     <div class="q">Conectar con tu planilla</div>
     <div class="q-sub">Se guarda solo en este teléfono. Lo haces una vez.</div>
     <label for="cfgUrl">URL de la implementación de Apps Script (termina en /exec)</label>
@@ -1339,7 +1374,7 @@
             var a = el('a', 'primary', 'Cobrar por WhatsApp');
             a.href = linkWhatsApp(mensajeCobro(desc, Number(u.bruto || u.monto), division)); a.target = '_blank'; a.rel = 'noopener';
             a.style.cssText = 'display:block;text-align:center;text-decoration:none;margin-top:10px;padding:16px;border-radius:24px;' +
-                              'background:var(--good);color:var(--ink);font-weight:700';
+                              'background:var(--good-fill);color:var(--ink);font-weight:700';
             m.appendChild(a);
             b.textContent = 'Listo'; egListo = true;
             $('egSplit').innerHTML = ''; egDiv = null;
@@ -2761,7 +2796,25 @@
     var setupEl = $('setup'), cfgUrl = $('cfgUrl'), cfgKey = $('cfgKey'), cfgMsg = $('cfgMsg'),
         cfgSave = $('cfgSave'), cfgCancel = $('cfgCancel');
 
+    /* ---------- Tema (modo noche / día / automático) ---------- */
+    var temaMQ = window.matchMedia ? matchMedia('(prefers-color-scheme: light)') : null;
+    function aplicarTema(){
+      var t = LS.get('gastos_tema', 'noche');
+      var claro = t === 'dia' || (t === 'auto' && temaMQ && temaMQ.matches);
+      document.documentElement.setAttribute('data-theme', claro ? 'light' : 'dark');
+      var mc = document.querySelector('meta[name="theme-color"]'); if(mc) mc.setAttribute('content', claro ? '#F4F3EF' : '#0E0E10');
+      $('temaSeg').querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.t === t); });
+      $('temaAyuda').textContent = t === 'auto' ? 'Sigue el modo claro u oscuro del teléfono.' : '';
+    }
+    $('temaSeg').querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click', function(){ LS.set('gastos_tema', b.dataset.t); aplicarTema(); });
+    });
+    if(temaMQ){ var alCambiar = function(){ if(LS.get('gastos_tema', 'noche') === 'auto') aplicarTema(); };
+      if(temaMQ.addEventListener) temaMQ.addEventListener('change', alCambiar); else if(temaMQ.addListener) temaMQ.addListener(alCambiar); }
+    aplicarTema();
+
     function abrirSetup(msg){
+      $('temaBox').hidden = !conn; // la primera vez solo se pide la conexión
       cfgUrl.value = conn ? conn.url : '';
       cfgKey.value = conn ? conn.key : '';
       cfgMsg.textContent = msg || ''; cfgMsg.className = 'msg' + (msg ? ' err' : '');
@@ -2964,7 +3017,7 @@
       if(division && division.length > 1){
         // con varias personas, la pantalla espera: ofrece mandar el cobro al grupo
         var a = el('a', 'primary', 'Cobrar por WhatsApp'); a.style.display = 'block'; a.style.borderRadius = '16px'; a.style.padding = '16px';
-        a.style.background = 'var(--good)'; a.style.color = 'var(--ink)'; a.style.fontWeight = '700'; a.style.borderRadius = '24px';
+        a.style.background = 'var(--good-fill)'; a.style.color = 'var(--ink)'; a.style.fontWeight = '700'; a.style.borderRadius = '24px';
         a.href = linkWhatsApp(mensajeCobro(data.descripcion || data.categoria, Number(data.monto), division)); a.target = '_blank'; a.rel = 'noopener';
         var listo = el('button', 'btn2', 'Listo');
         listo.addEventListener('click', terminarGuardado);
