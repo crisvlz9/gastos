@@ -1238,6 +1238,7 @@
         f('Monto', fmtMonto(u.monto));
       }
       f('Fecha', fmtFechaLarga(u.fecha));
+      if(u.mes && u.mes !== String(u.fecha).slice(0,7)) f('Cuenta para', 'Presupuesto de ' + nombreMes(u.mes));
       f('Medio de pago', u.medio || '—');
       if(Number(u.cuotas) > 1) f('Cuotas', u.cuota ? 'Cuota ' + u.cuota + ' de ' + u.cuotas : u.cuotas + ' cuotas');
       if(u.division && u.division.length) f('Dividido con', u.division.map(function(x){
@@ -1369,6 +1370,7 @@
         else if(u.cola) meta.appendChild(el('span', 'q', 'sin enviar'));
         else if(u.categoria) meta.appendChild(document.createTextNode(u.categoria));
         else meta.appendChild(el('span', 'tag', 'sin categoría'));
+        if(esGasto(u) && u.mes && u.mes !== String(u.fecha).slice(0,7)) meta.appendChild(document.createTextNode(' · para ' + nombreMes(u.mes)));
         if(u.bruto && u.bruto > u.monto) meta.appendChild(document.createTextNode(' · tu parte de ' + fmtMonto(u.bruto)));
         d.appendChild(meta);
         row.appendChild(d);
@@ -1434,7 +1436,8 @@
       egMes = u.mes || (u.fecha || isoHoy()).slice(0,7);
       $('egTitulo').textContent = 'Editar ' + tipo.toLowerCase();
       $('egMedBox').hidden = tipo !== 'Gasto';
-      $('egMesBox').hidden = tipo !== 'Ingreso';
+      // Mes del presupuesto: ingresos, y gastos (ej. un fijo pagado por adelantado). No para compras en cuotas.
+      $('egMesBox').hidden = !(tipo === 'Ingreso' || (tipo === 'Gasto' && !(Number(u.cuotas) > 1) && !u.cola));
       var enCuotas = Number(u.cuotas) > 1, dividido = !!(u.division && u.division.length);
       $('egDesc').value = String(u.descripcion || '').replace(SUF_CUOTA, '');
       $('egMonto').value = fmtMonto(u.bruto || u.monto);
@@ -1477,7 +1480,7 @@
         mb.appendChild(b);
       });
       var tipo = (egMov && egMov.tipo) || 'Gasto';
-      if(tipo === 'Ingreso'){
+      if(tipo === 'Ingreso' || tipo === 'Gasto'){
         pintarMesSeg($('egMesSeg'), $('egFecha').value || egMov.fecha, egMes, function(m){ egMes = m; pintarEgOpciones(); });
       }
       var cb = $('egCats'); cb.innerHTML = '';
@@ -1499,7 +1502,7 @@
       cargarResumen(); cargarPendientes(); cargarPresupuesto(); cargarDeudas();
     }
     montoInput($('egMonto'));
-    $('egFecha').addEventListener('change', function(){ if(egMov && egMov.tipo === 'Ingreso') pintarEgOpciones(); });
+    $('egFecha').addEventListener('change', function(){ if(egMov) pintarEgOpciones(); });
     $('egClose').addEventListener('click', function(){ cerrarEg(); });
     $('egSave').addEventListener('click', function(){
       if(egListo){ egListo = false; trasEditar(); return; }
@@ -1513,10 +1516,10 @@
       var payload = { action:'editar', id:u.id, descripcion:desc, categoria:egCat, fecha:$('egFecha').value || u.fecha };
       if(division) payload.division = division;
       if(esGasto(u)) payload.medio = egMedio;
-      if(u.tipo === 'Ingreso'){
+      if(u.tipo === 'Ingreso' || (esGasto(u) && !$('egMesBox').hidden)){
         // si cambió la fecha, el mes elegido debe seguir siendo el de la fecha o el siguiente
         var f7 = payload.fecha.slice(0,7);
-        if(egMes !== f7 && egMes !== mesSiguiente(f7)) egMes = mesPorDefecto(payload.fecha, 'Ingreso', egCat);
+        if(egMes !== f7 && egMes !== mesSiguiente(f7)) egMes = u.tipo === 'Ingreso' ? mesPorDefecto(payload.fecha, 'Ingreso', egCat) : f7;
         payload.mes = egMes;
       }
       if(!$('egMonto').disabled) payload.monto = monto;
