@@ -2705,11 +2705,34 @@
     }
 
     /* ---------- Componentes compartidos ---------- */
+    /**
+     * Da formato "$12.345" mientras escribes sin mandar el cursor al final:
+     * cuenta cuántos dígitos quedan a la derecha del cursor y lo vuelve a poner ahí.
+     */
+    function formatearMonto(inp){
+      var val = inp.value, pos = inp.selectionStart == null ? val.length : inp.selectionStart;
+      var derecha = val.slice(pos).replace(/\D/g, '').length;
+      var v = val.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+      var nuevo = v ? '$' + Number(v).toLocaleString('es-CL') : '';
+      inp.value = nuevo;
+      if(document.activeElement !== inp) return v;
+      var i = nuevo.length, cuenta = 0;
+      while(i > 0 && cuenta < derecha){ i--; if(/\d/.test(nuevo.charAt(i))) cuenta++; }
+      if(derecha === 0) i = nuevo.length;
+      else while(i > 1 && !/\d/.test(nuevo.charAt(i - 1))) i--; // quedar pegado al dígito anterior, no después del punto
+      try{ inp.setSelectionRange(i, i); }catch(e){}
+      return v;
+    }
+    /** Borrar sobre un punto de miles borra el dígito de al lado (si no, el punto vuelve a aparecer y no pasa nada). */
+    function saltarSeparador(e){
+      var inp = e.target, a = inp.selectionStart, z = inp.selectionEnd;
+      if(a == null || a !== z) return;
+      if(e.key === 'Backspace' && /[.$]/.test(inp.value.charAt(a - 1)) && a > 1) inp.setSelectionRange(a - 1, a - 1);
+      if(e.key === 'Delete' && /[.$]/.test(inp.value.charAt(a))) inp.setSelectionRange(a + 1, a + 1);
+    }
     function montoInput(inp){
-      inp.addEventListener('input', function(){
-        var v = inp.value.replace(/\D/g, '');
-        inp.value = v ? '$' + Number(v).toLocaleString('es-CL') : '';
-      });
+      inp.addEventListener('keydown', saltarSeparador);
+      inp.addEventListener('input', function(){ formatearMonto(inp); });
     }
     function pintarChips(box, inp, alElegir){
       box.innerHTML = '';
@@ -3119,10 +3142,9 @@
       data.mes = ''; pintarWizMes(); // se recalcula el mes por defecto con la nueva fecha
     });
     amount.addEventListener('input', function(){
-      data.monto = amount.value.replace(/\D/g,'');
-      amount.value = data.monto ? '$' + Number(data.monto).toLocaleString('es-CL') : '';
+      data.monto = formatearMonto(amount);
     });
-    amount.addEventListener('keydown', function(e){ if(e.key==='Enter') next(); });
+    amount.addEventListener('keydown', function(e){ if(e.key==='Enter') next(); else saltarSeparador(e); });
     desc.addEventListener('keydown', function(e){ if(e.key==='Enter') next(); });
     document.querySelectorAll('[data-next]').forEach(function(b){ b.addEventListener('click', next); });
     backBtn.addEventListener('click', function(){ if(cur > 0) go(pasoAnterior()); else cerrarWiz(); });
