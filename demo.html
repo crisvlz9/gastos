@@ -134,6 +134,23 @@
     #eg .del{ background:none; border:0; color:var(--danger); font-size:15px; padding:16px 0 4px; cursor:pointer; }
 
     .empty{ color:var(--muted); text-align:center; font-size:15px; padding:36px 10px; line-height:1.5; }
+    .vermas{ background:none; border:0; color:var(--link); font:inherit; font-size:14px; font-weight:600; display:flex;
+      align-items:center; gap:6px; padding:4px 0; cursor:pointer; }
+    .vermas svg, .bqbox svg{ width:16px; height:16px; }
+    .bqbox{ display:flex; align-items:center; gap:10px; background:var(--card); border:1.5px solid var(--line); border-radius:16px;
+      padding:0 14px; margin:12px 0 10px; color:var(--muted); }
+    .bqbox:focus-within{ border-color:var(--accent); }
+    .bqbox input{ flex:1; min-width:0; background:none; border:0; outline:none; color:var(--text); font:inherit; font-size:16px; padding:14px 0; }
+    .bqbox button{ background:none; border:0; color:var(--muted); font-size:20px; padding:4px; cursor:pointer; }
+    .bqmes[hidden]{ display:none; }
+    .bqmes{ display:flex; align-items:center; justify-content:space-between; margin:6px 0 4px; }
+    .bqmes b{ font-size:16px; }
+    .bqmes button{ background:var(--card-2); border:0; color:var(--text); width:38px; height:38px; border-radius:50%; font-size:18px; cursor:pointer; }
+    .bqmes button:disabled{ opacity:.3; }
+    .bqres{ font-size:13px; color:var(--muted); margin:8px 2px 10px; }
+    .bqdia{ font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); padding:14px 0 4px; }
+    .bqdia + .movw{ border-top:0; }
+    #bq .chips{ margin:0; }
     .soon{ text-align:center; padding:60px 20px; color:var(--muted); line-height:1.6; }
     .soon b{ display:block; color:var(--text); font-size:17px; margin-bottom:6px; }
 
@@ -650,7 +667,8 @@
           <div class="tiles" id="cats"></div>
         </div>
         <div class="sec" id="cMovs">
-          <div class="sec-h"><h2>Últimos movimientos</h2></div>
+          <div class="sec-h"><h2>Últimos movimientos</h2>
+            <button class="vermas" id="verTodos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Ver todos</button></div>
           <div class="card" style="padding:4px 16px"><div id="movs"></div></div>
         </div>
       </div>
@@ -784,6 +802,25 @@
     <button class="primary" id="ndSave">Guardar</button>
   </div>
   <datalist id="dl-personas"></datalist>
+
+  <!-- ================= TODOS LOS MOVIMIENTOS ================= -->
+  <div class="sheet" id="bq" style="z-index:27">
+    <div class="top" style="padding:8px 0 4px">
+      <button class="back" id="bqClose" aria-label="Cerrar">×</button>
+      <div class="q" style="margin:0">Movimientos</div>
+    </div>
+    <div class="bqbox">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="bqTxt" type="search" placeholder="Buscar por nombre, categoría o persona" autocomplete="off" enterkeyhint="search">
+      <button id="bqLimpiar" aria-label="Borrar búsqueda" hidden>×</button>
+    </div>
+    <div class="chips" id="bqTipos"></div>
+    <div class="bqmes" id="bqMes">
+      <button id="bqAnt" aria-label="Mes anterior">‹</button><b id="bqMesTxt"></b><button id="bqSig" aria-label="Mes siguiente">›</button>
+    </div>
+    <div class="bqres" id="bqRes"></div>
+    <div class="card" style="padding:0 16px 4px"><div id="bqList"></div></div>
+  </div>
 
   <!-- ================= EDITAR GASTO ================= -->
   <div class="sheet" id="eg">
@@ -967,6 +1004,16 @@
       },
       pendientes: function(){ return { ok:true, items:pendientes.slice(), personas:personas() }; },
       deudas: function(){ return { ok:true, items:deudas.slice() }; },
+      movimientos: function(){
+        // mes actual + el mes anterior completo, para poder navegar y buscar
+        var ant = [];
+        G.forEach(function(g, i){
+          var x = g[5] || {};
+          ant.push({ id:'p-' + i, tipo:'Gasto', fecha:iso(Y, M - 1, Math.min(g[0], 28)), descripcion:g[1], categoria:g[2],
+            monto:g[3], bruto:x.bruto || g[3], medio:g[4], cuotas:x.cuotas, cuota:x.cuota, division:x.division });
+        });
+        return { ok:true, items:movs.concat(ant).sort(function(a, b){ return b.fecha.localeCompare(a.fecha); }) };
+      },
       presupuesto: function(){ return { ok:true, mes:mes, base:base, efectivo:efectivo(), ajustes:ajustes, gastado:porCat(),
         variables:VAR, fijas:FIJ, ingresoReal:sumTipo('Ingreso'), ahorroReal:sumTipo('Ahorro') }; }
     };
@@ -1355,7 +1402,23 @@
       $('cMovs').style.display = ultimos.length ? '' : 'none';
       ultimos.forEach(function(u, i){
         var key = u.id || ('i' + i);
-        var wrap = el('div', 'movw' + (movAbierto === key ? ' open' : ''));
+        mbox.appendChild(filaMovimiento(u, movAbierto === key, function(){
+          movAbierto = (movAbierto === key) ? null : key;
+          renderInicio();
+        }));
+      });
+
+      // Aviso de gastos sin enviar
+      var b = $('bSinEnviar');
+      b.hidden = !cola.length;
+      b.textContent = cola.length === 1
+        ? '1 movimiento guardado en el teléfono. Se envía al volver la señal.'
+        : cola.length + ' movimientos guardados en el teléfono. Se envían al volver la señal.';
+    }
+
+    /** Fila de un movimiento con su detalle desplegable (Inicio y pantalla Movimientos). */
+    function filaMovimiento(u, abierto, alTocar){
+        var wrap = el('div', 'movw' + (abierto ? ' open' : ''));
         var row = el('div', 'mov');
         row.appendChild(iconoCat(u.categoria));
         var d = el('div', 'd');
@@ -1378,21 +1441,119 @@
         else if(u.tipo === 'Ahorro') row.appendChild(el('div', 'a sav', fmtMonto(u.monto)));
         else row.appendChild(el('div', 'a', fmtMonto(u.monto)));
         row.appendChild(el('span', 'chev', '▾'));
-        row.addEventListener('click', function(){
-          movAbierto = (movAbierto === key) ? null : key;
-          renderInicio();
-        });
+        row.addEventListener('click', alTocar);
         wrap.appendChild(row); wrap.appendChild(detalleMov(u));
-        mbox.appendChild(wrap);
+        return wrap;
+    }
+
+    /* =====================================================
+       TODOS LOS MOVIMIENTOS + BÚSQUEDA
+       ===================================================== */
+    var movsTodos = LS.get('demo_gastos_movs', null);   // última lista completa (sirve sin señal)
+    var bqTipo = 'Todos', bqMes = '', bqAbierto = null, bqCargando = false;
+
+    function cargarMovimientos(){
+      if(!conn) return;
+      bqCargando = true; renderBusq();
+      fetch(conn.url + '?action=movimientos&key=' + encodeURIComponent(conn.key))
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          bqCargando = false;
+          if(!j.ok || !j.items){ movsTodos = movsTodos || []; renderBusq(j.ok ? 'Falta crear una "Nueva versión" de Codigo.gs para ver todos los movimientos.' : errorServidor(j, 'No se pudo cargar.')); return; }
+          movsTodos = j.items;
+          try{ LS.set('demo_gastos_movs', movsTodos); }catch(e){}
+          renderBusq();
+        })
+        .catch(function(){ bqCargando = false; renderBusq(movsTodos ? '' : 'Sin conexión. Intenta de nuevo.'); });
+    }
+
+    function abrirBusq(){
+      bqMes = String(isoHoy()).slice(0,7); bqAbierto = null;
+      $('bqTxt').value = ''; $('bqLimpiar').hidden = true;
+      $('bq').classList.add('show'); $('bq').scrollTop = 0;
+      history.pushState({ capa:'bq' }, '');
+      renderBusq(); cargarMovimientos();
+    }
+    function cerrarBusq(desdeAtras){
+      $('bq').classList.remove('show');
+      if(!desdeAtras && history.state && history.state.capa === 'bq') volverHistorial();
+    }
+
+    function mesesCon(lista){
+      var m = {}; lista.forEach(function(u){ m[String(u.fecha).slice(0,7)] = 1; });
+      return Object.keys(m).sort();
+    }
+
+    function coincide(u, q){
+      var texto = norm([u.descripcion, u.categoria, u.medio, u.tipo,
+        (u.division || []).map(function(x){ return x.persona; }).join(' ')].join(' '));
+      var palabras = q.split(/\s+/).filter(Boolean);
+      var num = q.replace(/[$.\s]/g, '');
+      if(/^\d{3,}$/.test(num) && (String(u.monto) === num || String(u.bruto) === num)) return true;
+      return palabras.every(function(w){ return texto.indexOf(w) !== -1; });
+    }
+
+    function renderBusq(aviso){
+      // filtros
+      var tb = $('bqTipos'); tb.innerHTML = '';
+      ['Todos', 'Gastos', 'Ingresos', 'Ahorros'].forEach(function(t){
+        var c = el('button', 'chip' + (t === bqTipo ? ' sel' : ''), t);
+        c.addEventListener('click', function(){ bqTipo = t; bqAbierto = null; renderBusq(); });
+        tb.appendChild(c);
       });
 
-      // Aviso de gastos sin enviar
-      var b = $('bSinEnviar');
-      b.hidden = !cola.length;
-      b.textContent = cola.length === 1
-        ? '1 movimiento guardado en el teléfono. Se envía al volver la señal.'
-        : cola.length + ' movimientos guardados en el teléfono. Se envían al volver la señal.';
+      var lista = (movsTodos || []).slice();
+      cola.forEach(function(c){ lista.unshift(c); }); // lo que está en el teléfono sin enviar también se ve
+      var q = norm($('bqTxt').value.trim());
+      lista = lista.filter(function(u){
+        if(bqTipo === 'Gastos' && !esGasto(u)) return false;
+        if(bqTipo === 'Ingresos' && u.tipo !== 'Ingreso') return false;
+        if(bqTipo === 'Ahorros' && u.tipo !== 'Ahorro') return false;
+        return true;
+      });
+
+      // mes (solo sin búsqueda: al buscar se busca en todos los meses)
+      var meses = mesesCon(movsTodos || []);
+      if(meses.indexOf(bqMes) === -1) meses.push(bqMes), meses.sort();
+      var im = meses.indexOf(bqMes);
+      $('bqMes').hidden = !!q;
+      $('bqMesTxt').textContent = nombreMes(bqMes).charAt(0).toUpperCase() + nombreMes(bqMes).slice(1) + ' ' + bqMes.slice(0,4);
+      $('bqAnt').disabled = im <= 0; $('bqSig').disabled = im >= meses.length - 1;
+      if(q) lista = lista.filter(function(u){ return coincide(u, q); });
+      else lista = lista.filter(function(u){ return String(u.fecha).slice(0,7) === bqMes; });
+
+      // resumen
+      var gastado = 0, entra = 0, ahorro = 0;
+      lista.forEach(function(u){ if(esGasto(u)) gastado += Number(u.monto) || 0; else if(u.tipo === 'Ingreso') entra += Number(u.monto) || 0; else ahorro += Number(u.monto) || 0; });
+      var partes = [lista.length === 1 ? '1 movimiento' : lista.length + ' movimientos'];
+      if(gastado) partes.push('gastos ' + fmtMonto(gastado));
+      if(entra) partes.push('ingresos ' + fmtMonto(entra));
+      if(ahorro) partes.push('ahorro ' + fmtMonto(ahorro));
+      $('bqRes').textContent = bqCargando && !movsTodos ? 'Cargando…' : (aviso || partes.join(' · ') + (bqCargando ? ' · actualizando…' : ''));
+
+      // lista agrupada por día
+      var box = $('bqList'); box.innerHTML = '';
+      if(!lista.length){
+        box.appendChild(el('div', 'empty', bqCargando && !movsTodos ? 'Cargando…' : q ? 'No encontré movimientos con "' + $('bqTxt').value.trim() + '".' : 'Sin movimientos este mes.'));
+        return;
+      }
+      var MAX = 300, dia = '';
+      lista.slice(0, MAX).forEach(function(u, i){
+        if(u.fecha !== dia){ dia = u.fecha; box.appendChild(el('div', 'bqdia', fmtFechaLarga(u.fecha))); }
+        var key = (u.id || 'q') + '|' + i;
+        box.appendChild(filaMovimiento(u, bqAbierto === key, function(){
+          bqAbierto = bqAbierto === key ? null : key; renderBusq();
+        }));
+      });
+      if(lista.length > MAX) box.appendChild(el('div', 'empty', 'Se muestran los ' + MAX + ' más recientes. Escribe algo más específico para acotar.'));
     }
+
+    $('verTodos').addEventListener('click', abrirBusq);
+    $('bqClose').addEventListener('click', function(){ cerrarBusq(); });
+    $('bqTxt').addEventListener('input', function(){ bqAbierto = null; $('bqLimpiar').hidden = !this.value; renderBusq(); });
+    $('bqLimpiar').addEventListener('click', function(){ $('bqTxt').value = ''; this.hidden = true; bqAbierto = null; renderBusq(); $('bqTxt').focus(); });
+    $('bqAnt').addEventListener('click', function(){ var m = mesesCon(movsTodos || []), i = m.indexOf(bqMes); if(i > 0){ bqMes = m[i - 1]; bqAbierto = null; renderBusq(); } });
+    $('bqSig').addEventListener('click', function(){ var m = mesesCon(movsTodos || []), i = m.indexOf(bqMes); if(i < m.length - 1){ bqMes = m[i + 1]; bqAbierto = null; renderBusq(); } });
 
     /* =====================================================
        TIPOS DE MOVIMIENTO: Gasto | Ingreso | Ahorro
@@ -1500,6 +1661,7 @@
     function trasEditar(){
       cerrarEg(); movAbierto = null;
       cargarResumen(); cargarPendientes(); cargarPresupuesto(); cargarDeudas();
+      if($('bq').classList.contains('show')){ bqAbierto = null; cargarMovimientos(); }
     }
     montoInput($('egMonto'));
     $('egFecha').addEventListener('change', function(){ if(egMov) pintarEgOpciones(); });
@@ -3119,6 +3281,7 @@
     window.addEventListener('popstate', function(){
       if(ignorarPop){ ignorarPop--; return; }
       if($('eg').classList.contains('show')){ cerrarEg(true); return; }
+      if($('bq').classList.contains('show')){ cerrarBusq(true); return; }
       if($('nd').classList.contains('show')){ cerrarNd(true); return; }
       if($('pe').classList.contains('show')){ cerrarPe(true); return; }
       if(personaAbierta && !wiz.classList.contains('show')){ cerrarPersona(true); return; }
