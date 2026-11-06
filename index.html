@@ -1518,7 +1518,6 @@
       var refV = cur ? cur.presupuesto : todos[todos.length - 1].presupuesto;
       if(refV){
         var ref = el('div', 'ref'); ref.style.bottom = (refV / tope * 100) + '%'; bars.appendChild(ref);
-        var rt = el('div', 'reft', 'Presupuesto ' + kMonto(refV)); rt.style.bottom = (refV / tope * 100) + '%'; bars.appendChild(rt);
       }
       var cols = el('div', 'tdcols'); cols.style.gridTemplateColumns = 'repeat(' + todos.length + ', minmax(0,1fr))';
       var mesesRow = el('div', 'tdmeses'); mesesRow.style.gridTemplateColumns = cols.style.gridTemplateColumns;
@@ -1539,7 +1538,8 @@
       });
       bars.appendChild(cols); A.appendChild(bars); A.appendChild(mesesRow);
       var ley = el('div', 'tdley');
-      ley.innerHTML = '<span><i style="border-top:1.5px dashed var(--line-2)"></i>Presupuesto</span>' +
+      // el monto del presupuesto va en la leyenda (sobre el gráfico chocaba con la etiqueta de la barra)
+      ley.innerHTML = (refV ? '<span><i style="border-top:1.5px dashed var(--line-2)"></i>Presupuesto ' + fmtMonto(refV) + '</span>' : '') +
         (proj > (cur ? cur.total : 0) ? '<span><i style="height:9px;border:1.5px dashed var(--accent);border-bottom:0;width:10px"></i>Proyección a fin de mes</span>' : '') +
         '<span>Toca un mes para ver sus categorías</span>';
       A.appendChild(ley);
@@ -1621,14 +1621,12 @@
           '<path d="' + linea(R.actual) + '" fill="none" style="stroke:var(--accent)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"></path>' +
           '<circle cx="' + X(R.dia) + '" cy="' + Y(hoyV) + '" r="5" style="fill:var(--accent);stroke:var(--card)" stroke-width="2"></circle></svg>';
         var mesAnt = tend.meses[tend.meses.length - 2];
-        if(R.presVar){ var e1 = el('span', 'et', 'Presupuesto ' + kMonto(R.presVar)); e1.style.top = 'calc(' + (Y(R.presVar) / (H + 2) * 100) + '% - 16px)'; rw.appendChild(e1); }
-        if(ant.length && mesAnt){ var e2 = el('span', 'et', mesLargo(mesAnt.mes) + ' ' + kMonto(ant[ant.length - 1])); e2.style.top = 'calc(' + (Y(ant[ant.length - 1]) / (H + 2) * 100) + '% + 4px)'; rw.appendChild(e2); }
         Cc.appendChild(rw);
         var dd = el('div', 'tddias'); [1, 10, 20, dias].forEach(function(d){ dd.appendChild(el('span', '', String(d))); }); Cc.appendChild(dd);
         var l2 = el('div', 'tdley');
         l2.innerHTML = '<span><i style="height:3px;border-radius:2px;background:var(--accent)"></i>' + mesLargo(actual) + '</span>' +
-          (ant.length && mesAnt ? '<span><i style="height:2px;border-radius:2px;background:var(--muted)"></i>' + mesLargo(mesAnt.mes) + '</span>' : '') +
-          (R.presVar ? '<span><i style="border-top:1.5px dashed var(--line-2)"></i>Ritmo del presupuesto</span>' : '');
+          (ant.length && mesAnt ? '<span><i style="height:2px;border-radius:2px;background:var(--muted)"></i>' + mesLargo(mesAnt.mes) + ' (cerró en ' + fmtMonto(ant[ant.length - 1]) + ')</span>' : '') +
+          (R.presVar ? '<span><i style="border-top:1.5px dashed var(--line-2)"></i>Ritmo del presupuesto (' + fmtMonto(R.presVar) + ')</span>' : '');
         Cc.appendChild(l2);
         box.appendChild(Cc);
       }
