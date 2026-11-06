@@ -544,6 +544,14 @@
     .card.hero .sub{ color:var(--hero-2); }
     .card.hero .ingrow{ border-top-color:rgba(255,255,255,.22); color:var(--hero-2); }
     .card.hero .ingrow b, .card.hero .ingrow .inc, .card.hero .ingrow .sav{ color:#fff; }
+    .card.hero .ingrow{ cursor:pointer; }
+    .ingrow .chev{ margin-left:auto; align-self:center; font-size:13px; transition:transform .2s; }
+    .ingrow.open .chev{ transform:rotate(180deg); }
+    .ingdet{ margin-top:10px; padding:10px 12px; border-radius:14px; background:rgba(0,0,0,.22); font-size:13.5px; color:var(--hero-2); cursor:default; }
+    .ingdet .f{ display:flex; justify-content:space-between; padding:4px 0; }
+    .ingdet .f b{ color:#fff; font-family:var(--mono); font-weight:700; font-variant-numeric:tabular-nums; }
+    .ingdet .f.tot{ border-top:1px solid rgba(255,255,255,.25); margin-top:4px; padding-top:8px; color:#fff; font-weight:600; }
+    .ingdet .nota{ font-size:11.5px; margin-top:6px; line-height:1.4; }
     .card.hero .bar{ background:var(--hero-soft); }
     .card.hero .bar b{ background:#fff; opacity:.9; }
     .hero-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
@@ -707,6 +715,7 @@
           <div class="hero-foot" id="totFoot" hidden></div>
           <div class="sub" id="totSub"></div>
           <div class="ingrow" id="ingRow" hidden></div>
+          <div class="ingdet" id="ingDet" hidden></div>
         </div>
         <div class="banner warn" id="bPend" hidden>
           <span id="bPendTxt"></span><span>›</span>
@@ -1225,14 +1234,14 @@
       if(conPres){
         var quedan = totVar - gasVar;
         var D = diasDelMes(), restantes = D - new Date().getDate() + 1;
-        $('totLbl').textContent = quedan >= 0 ? 'Te quedan' : 'Te pasaste por';
+        $('totLbl').textContent = quedan >= 0 ? 'Te quedan para variables' : 'Te pasaste en variables por';
         $('totMonto').textContent = fmtMonto(Math.abs(quedan));
         $('totPill').textContent = restantes === 1 ? 'último día' : restantes + ' días';
         pintarSegmentos($('totSeg'), gasVar / totVar);
         var ft = $('totFoot'); ft.innerHTML = '';
         var a1 = el('span'); a1.appendChild(document.createTextNode('Gastado ')); a1.appendChild(el('b', '', fmtMonto(gasVar)));
-        var a2 = el('span'); a2.appendChild(document.createTextNode('de ')); a2.appendChild(el('b', '', fmtMonto(totVar)));
-        ft.appendChild(a1); ft.appendChild(a2);
+        a1.appendChild(document.createTextNode(' de ')); a1.appendChild(el('b', '', fmtMonto(totVar))); a1.appendChild(document.createTextNode(' presupuestados'));
+        ft.appendChild(a1);
         $('totSub').textContent = 'Total del mes ' + fmtMonto(total) + ' · ' + nMov;
       } else {
         $('totMonto').textContent = hayDatos ? fmtMonto(total) : '—';
@@ -1249,13 +1258,32 @@
       });
       var ir = $('ingRow'); ir.innerHTML = '';
       ir.hidden = !(ingT || ahoT);
+      var det = $('ingDet'); det.innerHTML = ''; det.hidden = ir.hidden || !verBalance;
+      ir.classList.toggle('open', !!verBalance);
       if(ingT || ahoT){
-        [['Ingresos', ingT, 'inc'], ['Ahorrado', ahoT, 'sav'], ['Te queda', ingT - total - ahoT, '']].forEach(function(x){
+        // Libre del mes = ingresos − todos los gastos (fijos + variables) − ahorro. Al tocar se ve la resta.
+        var fijos = 0;
+        ((pres && pres.fijas) || []).forEach(function(c){ fijos += cats[c] || 0; });
+        var varTot = total - fijos, libre = ingT - total - ahoT;
+        [['Ingresos', ingT, 'inc'], ['Ahorrado', ahoT, 'sav'], ['Libre del mes', libre, '']].forEach(function(x){
           var c = el('div'); c.appendChild(document.createTextNode(x[0]));
           var b = el('b', x[2], (x[1] < 0 ? '− ' : '') + fmtMonto(Math.abs(x[1])));
-          if(x[0] === 'Te queda' && x[1] < 0) b.style.color = 'var(--over)';
+          if(x[2] === '' && x[1] < 0) b.style.color = 'var(--over)';
           c.appendChild(b); ir.appendChild(c);
         });
+        ir.appendChild(el('span', 'chev', '▾'));
+        var fila = function(t, v, cls){
+          var f = el('div', 'f' + (cls ? ' ' + cls : '')); f.appendChild(el('span', '', t));
+          f.appendChild(el('b', '', v)); det.appendChild(f);
+        };
+        fila('Ingresos', '+ ' + fmtMonto(ingT));
+        fila('Gastos fijos', '− ' + fmtMonto(fijos));
+        fila('Gastos variables', '− ' + fmtMonto(varTot));
+        fila('Ahorro', '− ' + fmtMonto(ahoT));
+        fila('Libre del mes', (libre < 0 ? '− ' : '') + fmtMonto(Math.abs(libre)), 'tot');
+        det.appendChild(el('div', 'nota', libre < 0
+          ? 'Negativo: este mes salió más de lo que entró. Puede ser normal a comienzo de mes si algún ingreso todavía no está registrado.'
+          : 'Lo que no está gastado ni ahorrado. Los gastos sin categoría se cuentan como variables.'));
       }
 
       // Categorías
@@ -1635,6 +1663,9 @@
 
     $('tdOpen').addEventListener('click', abrirTend);
     $('cTot').addEventListener('click', abrirTend);
+    var verBalance = false; // desglose de "Libre del mes" abierto
+    $('ingRow').addEventListener('click', function(e){ e.stopPropagation(); verBalance = !verBalance; renderInicio(); });
+    $('ingDet').addEventListener('click', function(e){ e.stopPropagation(); });
     $('tdClose').addEventListener('click', function(){ cerrarTend(); });
     $('tdRango').querySelectorAll('button').forEach(function(b){
       b.addEventListener('click', function(){ tdN = Number(b.dataset.n); LS.set('gastos_td_n', tdN); renderTend(); });
