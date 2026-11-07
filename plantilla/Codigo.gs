@@ -4,7 +4,7 @@
  * ARCHIVOS: este (obligatorio) + Correos.gs (opcional: lectura automática de correos del banco).
  *   Sin Correos.gs la app funciona igual con registro manual, y Google no pide acceso a tu Gmail.
  *
- * CÓMO INSTALARLO (resumen; la guía completa está en plantilla/LEEME.md del repo):
+ * CÓMO INSTALARLO (resumen; la guía completa está en plantilla/README.md del repo):
  *   1. Sube Gastos-plantilla.xlsx a tu Drive y ábrelo como Hoja de cálculo de Google.
  *   2. En esa hoja: Extensiones → Apps Script. Borra lo que haya y pega este archivo completo.
  *   3. Edita la sección "TUS DATOS" (abajo) y guarda.
