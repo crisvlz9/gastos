@@ -8,15 +8,20 @@ Tiempo: unos 10 minutos, desde un computador.
 
 | Archivo | Para qué |
 | --- | --- |
-| `Gastos-plantilla.xlsx` | La hoja vacía con todas las pestañas. |
-| `Codigo.gs` | El script que conecta la hoja con la app. |
+| `Codigo.gs` | El script que conecta la hoja con la app. Obligatorio. |
+| `Correos.gs` | Lectura automática de correos del banco. Opcional: sin él, Google no pide acceso a tu Gmail. |
+| `Gastos-plantilla.xlsx` | La hoja vacía, para instalar sin el link de copia. |
 
 ## Pasos
+
+**Forma rápida:** pídele a Cris el link de copia (termina en `/copy`). Al abrirlo, Google te ofrece hacer una copia que ya trae `Codigo.gs`: haz la copia y parte en el paso 4.
+
+**Forma manual:**
 
 1. **Descarga** `Gastos-plantilla.xlsx` (botón *Download raw file* en GitHub).
 2. **Súbelo a Google Drive**, ábrelo y usa *Archivo → Guardar como Hoja de cálculo de Google*. Trabaja en esa copia.
 3. En la hoja: *Extensiones → Apps Script*. Borra lo que haya, pega todo `Codigo.gs` y guarda (ícono de disquete).
-4. Arriba en `Codigo.gs`, edita la sección **TUS DATOS**: tu nombre como lo escriben los bancos, tus categorías, medios de pago y día de corte del sueldo. Guarda.
+4. En *Extensiones → Apps Script*, arriba en `Codigo.gs`, edita la sección **TUS DATOS**: tu nombre como lo escriben los bancos, tus categorías, medios de pago y día de corte del sueldo. Guarda.
 5. Vuelve a la hoja y **recarga la página**. Aparece el menú **Gastos**. Elige *Gastos → Configurar* y autoriza los permisos.
    - Google mostrará *"Google no verificó esta app"*. Es normal en scripts propios: *Configuración avanzada → Ir a … (no seguro)*. El script solo corre en tu cuenta.
 6. En Apps Script: *Implementar → Nueva implementación* → engranaje → *Aplicación web*.
@@ -28,7 +33,7 @@ Tiempo: unos 10 minutos, desde un computador.
 
 ## Opcional: registro automático
 
-- **Correos de Banco de Chile / Edwards:** *Gastos → Activar lectura de correos del banco*. Lee tu Gmail cada 10 minutos, desde el día en que lo actives. Otros bancos aún no están soportados.
+- **Correos de Banco de Chile / Edwards:** en Apps Script, *+ junto a Archivos → Secuencia de comandos*, nómbralo `Correos` y pega `Correos.gs`. Recarga la hoja y usa *Gastos → Activar lectura de correos del banco*. Lee tu Gmail cada 10 minutos, desde el día en que lo actives. Otros bancos aún no están soportados.
 - **Notificaciones push (Android):** con MacroDroid se puede reenviar el aviso de compra del banco a la URL `/exec` con `{"action":"notif","key":"<tu clave>","texto":"<texto de la notificación>"}`. Hoy solo entiende el formato de Santander.
 - **iPhone:** no permite reenviar notificaciones; usa el registro manual con el botón **+**.
 

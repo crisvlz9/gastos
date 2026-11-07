@@ -1,6 +1,9 @@
 /**
  * Registrar Gasto — API (Apps Script) · PLANTILLA para compartir
  *
+ * ARCHIVOS: este (obligatorio) + Correos.gs (opcional: lectura automática de correos del banco).
+ *   Sin Correos.gs la app funciona igual con registro manual, y Google no pide acceso a tu Gmail.
+ *
  * CÓMO INSTALARLO (resumen; la guía completa está en plantilla/LEEME.md del repo):
  *   1. Sube Gastos-plantilla.xlsx a tu Drive y ábrelo como Hoja de cálculo de Google.
  *   2. En esa hoja: Extensiones → Apps Script. Borra lo que haya y pega este archivo completo.
@@ -111,7 +114,7 @@ function procesarNotif_(texto) {
     return procesarNotifCore_(texto);
   } catch (err) {
     // El Sheet no se pudo escribir (ej. almacenamiento lleno): se guarda en las propiedades
-    // del script, que no ocupan espacio de Drive, y revisarCorreos la reintenta cada 10 min.
+    // del script, que no ocupan espacio de Drive, y revisarCorreos (Correos.gs) la reintenta cada 10 min; sin Correos.gs, ejecuta reintentarRespaldo_ a mano.
     guardarEnRespaldo_(texto);
     return { ok: true, procesado: false, enRespaldo: true, error: String(err.message || err) };
   }
@@ -1184,144 +1187,8 @@ function eliminarGasto_(d) {
   });
 }
 
-/* ---------- Correos Banco de Chile / Edwards ---------- */
-
-/**
- * Formato (oct 2026), asunto "Compra con Tarjeta de Crédito":
- * "Te informamos que se ha realizado una compra por $58.960 con Tarjeta de
- *  Crédito ****5678 en MERPAGO*MCDONALDSCHI el 04/10/2026 17:41."
- * Se ejecuta sola cada 10 minutos (ver crearActivador).
- */
-function revisarCorreos() {
-  // 1) Notificaciones de Santander que quedaron en respaldo (Sheet sin espacio, etc.)
-  reintentarRespaldo_();
-
-  const label = GmailApp.getUserLabelByName(LABEL_PROCESADO) || GmailApp.createLabel(LABEL_PROCESADO);
-  const fin = ' after:' + correoDesde_() + ' -label:' + LABEL_PROCESADO;
-
-  // 2) Transferencias: las que haces (comprobante de Banco de Chile) y las que te hacen
-  //    (aviso del banco de quien te transfiere: Santander, Itaú, …). Van antes que las compras.
-  GmailApp.search('("has realizado una transferencia" OR "transferencia a tu cuenta" OR ' +
-                  '"ha instruido una transferencia" OR "ha efectuado una transferencia" OR ' +
-                  '"transferencia de fondos a tu cuenta" OR "te ha transferido" OR "te transfirió")' + fin, 0, 30)
-    .forEach(function (hilo) {
-      let todoOk = true;
-      hilo.getMessages().forEach(function (msg) { if (!procesarCorreoTransf_(msg)) todoOk = false; });
-      cerrarHilo_(hilo, label, todoOk);
-    });
-
-  // 3) Compras con tarjeta de Banco de Chile / Edwards
-  GmailApp.search('from:(bancoedwards.cl OR bancochile.cl) subject:(compra OR "cargo en cuenta")' + fin, 0, 30)
-    .forEach(function (hilo) {
-      let todoOk = true;
-      hilo.getMessages().forEach(function (msg) {
-        const texto = msg.getPlainBody().replace(/\s+/g, ' ').trim();
-        const p = parsearBChile_(texto);
-        if (p) {
-          agregarGasto_({
-            id: 'm-' + msg.getId(),
-            monto: p.monto,
-            descripcion: p.comercio,
-            medio: p.medio,
-            categoria: '',
-            fecha: p.fecha,
-            origen: 'BChile auto'
-          });
-        } else {
-          registrarSinProcesar_('[Correo] ' + msg.getSubject() + ' | ' + texto.slice(0, 500));
-          todoOk = false;
-        }
-      });
-      cerrarHilo_(hilo, label, todoOk);
-    });
-}
-
-/**
- * Marca el hilo como procesado (no se vuelve a leer) y, si todo se registró bien, lo saca de la
- * bandeja de entrada: queda en la etiqueta "Gastos-procesado" de Gmail. Lo que no se entendió
- * (publicidad del banco, formatos nuevos) se queda en la bandeja para que lo veas.
- */
-function cerrarHilo_(hilo, label, todoOk) {
-  hilo.addLabel(label);
-  if (todoOk && ARCHIVAR_PROCESADOS) hilo.moveToArchive();
-}
-
-/** Ejecútala UNA vez: saca de la bandeja de entrada los correos que ya se habían procesado. */
-function archivarProcesados() {
-  let total = 0;
-  for (let k = 0; k < 20; k++) {
-    const hilos = GmailApp.search('label:' + LABEL_PROCESADO + ' in:inbox', 0, 100);
-    if (!hilos.length) break;
-    GmailApp.moveThreadsToArchive(hilos);
-    total += hilos.length;
-  }
-  Logger.log('Hilos archivados: ' + total);
-}
-
-function parsearBChile_(t) {
-  const mUsd = t.match(/compra por US\$\s*([\d.,]+)/i);
-  const mMonto = mUsd ? null : t.match(/compra por \$\s*([\d.]+)/i);
-  if (!mMonto && !mUsd) return null;
-  const mTipo  = t.match(/Tarjeta de (Cr[eé]dito|D[eé]bito)/i);
-  const mCom   = t.match(/\*+\s*\d{4} en (.+?) el \d{2}\/\d{2}\/\d{4}/i);
-  const mFecha = t.match(/el (\d{2})\/(\d{2})\/(\d{4})/);
-
-  const fecha = mFecha ? mFecha[3] + '-' + mFecha[2] + '-' + mFecha[1] : '';
-  let comercio = mCom ? limpiarComercio_(mCom[1]) : 'Compra Banco de Chile';
-  let monto;
-  if (mUsd) {
-    // "16,50" o "1.234,56" → 16.5 / 1234.56. Se guarda en pesos al dólar observado del día.
-    const usd = Number(mUsd[1].replace(/\./g, '').replace(',', '.'));
-    const tc = dolarDelDia_(fecha);
-    monto = String(Math.round(usd * tc.valor));
-    comercio += ' (US$' + mUsd[1] + (tc.estimado ? ' · TC estimado' : '') + ')';
-  } else {
-    monto = mMonto[1].replace(/\./g, '');
-  }
-  return {
-    monto: monto, fecha: fecha, comercio: comercio,
-    medio: (mTipo && /d[eé]bito/i.test(mTipo[1])) || /con cargo a cuenta/i.test(t) ? 'Débito' : 'Crédito'
-  };
-}
-
-/**
- * Dólar observado (mindicador.cl, gratis). Si ese día no hay valor (fin de semana/feriado) usa el último
- * publicado; si no hay conexión, el último que se guardó. { valor, estimado }
- */
-function dolarDelDia_(fechaIso) {
-  const props = PropertiesService.getScriptProperties();
-  const cache = CacheService.getScriptCache();
-  const k = 'usd_' + (fechaIso || 'hoy');
-  const c = cache.get(k);
-  if (c) return { valor: Number(c), estimado: false };
-  const urls = [];
-  if (/^\d{4}-\d{2}-\d{2}$/.test(fechaIso || '')) {
-    const p = fechaIso.split('-');
-    urls.push('https://mindicador.cl/api/dolar/' + p[2] + '-' + p[1] + '-' + p[0]);
-  }
-  urls.push('https://mindicador.cl/api/dolar');
-  for (let i = 0; i < urls.length; i++) {
-    try {
-      const j = JSON.parse(UrlFetchApp.fetch(urls[i], { muteHttpExceptions: true }).getContentText());
-      const v = j && j.serie && j.serie[0] && Number(j.serie[0].valor);
-      if (v) { cache.put(k, String(v), 21600); props.setProperty('usd_ultimo', String(v)); return { valor: v, estimado: false }; }
-    } catch (e) { /* sigue con la siguiente */ }
-  }
-  return { valor: Number(props.getProperty('usd_ultimo')) || 950, estimado: true };
-}
-
-/** Quita prefijos de pasarelas de pago: "MERPAGO*MCDONALDSCHI" → "MCDONALDSCHI". */
 function limpiarComercio_(c) {
   return c.trim().replace(/^(MERPAGO|MERCADOPAGO|MP|DLO|DL|PAYU|FLOW|KHIPU|SUMUP)\s*\*\s*/i, '');
-}
-
-/** Ejecútala UNA vez: deja revisarCorreos corriendo cada 10 minutos. */
-function crearActivador() {
-  ScriptApp.getProjectTriggers()
-    .filter(function (t) { return t.getHandlerFunction() === 'revisarCorreos'; })
-    .forEach(function (t) { ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('revisarCorreos').timeBased().everyMinutes(10).create();
-  Logger.log('Activador creado: revisarCorreos cada 10 minutos');
 }
 
 /* ---------- Transferencias ---------- */
@@ -1331,107 +1198,6 @@ const PREF_AHORRO   = '_Ahorro:';
 const TCOL = { FECHA: 1, REMITENTE: 2, MONTO: 3, BANCO: 4, ESTADO: 5, ID: 6, REG: 7, ASUNTO: 8 };
 const MESES_ES = { enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8,
                    septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12 };
-
-function procesarCorreoTransf_(msg) {
-  const texto = msg.getPlainBody().replace(/\s+/g, ' ').trim();
-  const de = msg.getFrom();
-  const id = 'm-' + msg.getId();
-
-  const env = /bancochile\.cl|bancoedwards\.cl/i.test(de) ? parsearTransfEnviada_(texto) : null;
-  if (env) corregirComoRecibida_(id);   // versiones anteriores lo tomaban como transferencia recibida
-  if (env && esInterna_(env.persona)) {
-    // Traspaso a otra cuenta tuya. La descripción siempre lleva el banco de destino ("traspaso a BancoEstado"),
-    // así una regla en la pestaña Reglas puede decidir según la cuenta y no según lo que escribas en el mensaje.
-    const banco = nombreBanco_(env.banco);
-    const desc = (env.mensaje ? env.mensaje + ' · ' : '') + 'traspaso a ' + (banco || 'cuenta propia');
-    const cat = categoriaPorRegla_(desc, leerReglas_());
-    agregarGasto_({
-      id: id, monto: env.monto, medio: 'Transferencia', fecha: env.fecha, descripcion: desc,
-      // con regla → gasto de esa categoría · sin regla y con mensaje → Pendientes · sin nada → movimiento interno
-      categoria: cat || (env.mensaje ? '' : CAT_INTERNA),
-      origen: cat || env.mensaje ? 'BChile traspaso' : ORIGEN_TRANSF
-    });
-    return true;
-  }
-  if (env) {
-    agregarGasto_({
-      id: id, monto: env.monto, medio: 'Transferencia', categoria: '', fecha: env.fecha,
-      descripcion: 'Transf. a ' + env.persona + (env.mensaje ? ' · ' + env.mensaje : ''),
-      origen: ORIGEN_TRANSF
-    });
-    return true;
-  }
-  const rec = parsearTransfRecibida_(texto);
-  if (rec) {
-    agregarTransfRecibida_({ id: id, monto: rec.monto, fecha: rec.fecha, remitente: rec.persona || 'Remitente desconocido',
-                             banco: bancoDeCorreo_(de), asunto: rec.asunto,
-                             estado: esInterna_(rec.persona) ? 'Interna' : '' });
-    return true;
-  }
-  if (/\$\s*[\d.]+/.test(texto)) registrarSinProcesar_('[Transferencia] ' + msg.getSubject() + ' | ' + texto.slice(0, 500));
-  return false;
-}
-
-/** Comprobante "Transferencia a terceros" de Banco de Chile / Edwards. */
-function parsearTransfEnviada_(t) {
-  // A terceros en Banco de Chile: "has realizado una Transferencia…"; a otros bancos: "usted ha efectuado una transferencia…"
-  if (!/has realizado una Transferencia|usted ha efectuado una transferencia/i.test(t)) return null;
-  const mMonto = t.match(/Monto:?\s*\$\s*([\d.]+)/i);
-  if (!mMonto) return null;
-  const mNom = t.match(/Nombre y Apellido:?\s+(.+?)\s+Rut\b/i) || t.match(/Destinatario:?\s+Nombre:?\s+(.+?)\s+Rut\b/i)
-            || t.match(/transferencia de fondos a (.+?), el d[ií]a/i);
-  const mMsg = t.match(/Mensaje:?\s+(.*?)\s*Fecha y Hora/i) || t.match(/Mensaje:?\s+(.{1,60}?)\s*(?:Si tienes|Antes de|Nota:|$)/i);
-  const mBco = t.match(/Destin\w*.*?\bBanco:?\s+(.+?)\s+(?:E-?mail|Mail|Monto|Datos)\b/i);
-  const mF   = t.match(/(\d{1,2}) de ([a-záéíóú]+) de (\d{4})/i);
-  const mF2  = t.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-  let fecha = '';
-  if (mF && MESES_ES[mF[2].toLowerCase()]) {
-    fecha = mF[3] + '-' + String(MESES_ES[mF[2].toLowerCase()]).padStart(2, '0') + '-' + mF[1].padStart(2, '0');
-  } else if (mF2) fecha = mF2[3] + '-' + mF2[2] + '-' + mF2[1];
-  return {
-    monto: mMonto[1].replace(/\./g, ''), fecha: fecha,
-    persona: mNom ? mNom[1].trim() : 'destinatario',
-    mensaje: mMsg ? mMsg[1].trim() : '',
-    banco: mBco ? mBco[1].trim() : ''
-  };
-}
-
-/**
- * Aviso del banco de quien te transfiere. Formatos conocidos (oct 2026):
- * Santander: "nuestro cliente NOMBRE realizó una transferencia a tu cuenta … Monto transferido $ 15.873"
- * Itaú:      "nuestro(a) cliente NOMBRE , ha instruido una transferencia de fondos … Monto: $20.000"
- * B. Chile:  "nuestro(a) cliente NOMBRE ha efectuado una transferencia de fondos a tu cuenta … Asunto X … Monto $9.611"
- */
-function parsearTransfRecibida_(t) {
-  if (!/transferencia (?:de fondos )?a tu cuenta|ha (?:instruido|efectuado) una transferencia|te (ha )?transferid|te transfiri[oó]|transferencia recibida/i.test(t)) return null;
-  if (/has realizado una Transferencia|usted ha efectuado una transferencia/i.test(t)) return null;   // son enviadas
-  const mMonto = t.match(/Monto(?: transferido| abonado| recibido| a transferir)?\s*:?\s*(?:CLP\s*)?\$\s*([\d.]+)/i)
-              || t.match(/Monto[^$\d]{0,40}\$\s*([\d.]+)/i)
-              || t.match(/Monto(?: transferido| abonado| recibido)?\s*:?\s*(\d{1,3}(?:\.\d{3})+|\d+)\b/i);
-  if (!mMonto) return null;
-  const mFecha = t.match(/(\d{2})[\/-](\d{2})[\/-](\d{4})/);
-  const mNom = t.match(/nuestro\s*\(?a?\)?\s+cliente\s+(.+?)\s*,?\s+(?:realiz[oó]|ha realizado|ha instruido|ha efectuado|te )/i);
-  // Asunto o mensaje que escribió quien transfiere (ej. "Micherey"), si viene
-  const mAs = t.match(/(?:Asunto|Mensaje)\s*:?\s+(.{1,40}?)\s+(?:Datos de|Nombre|Monto|Rut|Banco|Fecha|N[uú]mero|Email|Cuenta)\b/i);
-  const asunto = mAs && !/antes de imprimir|importante|^itau/i.test(mAs[1]) ? mAs[1].trim() : '';
-  return {
-    monto: mMonto[1].replace(/\./g, ''),
-    fecha: mFecha ? mFecha[3] + '-' + mFecha[2] + '-' + mFecha[1] : '',
-    persona: mNom ? mNom[1].trim() : '',
-    asunto: asunto
-  };
-}
-
-function bancoDeCorreo_(de) {
-  const d = String(de).toLowerCase();
-  const B = [['santander', 'Santander'], ['itau', 'Itaú'], ['bci', 'BCI'], ['bancoestado', 'BancoEstado'],
-             ['scotiabank', 'Scotiabank'], ['bancochile', 'Banco de Chile'], ['bancoedwards', 'Banco de Chile'],
-             ['falabella', 'Falabella'], ['ripley', 'Ripley'], ['security', 'Security'], ['bice', 'BICE'],
-             ['mercadopago', 'Mercado Pago'], ['tenpo', 'Tenpo'], ['machbank', 'MACH'], ['consorcio', 'Consorcio']];
-  for (let i = 0; i < B.length; i++) if (d.indexOf(B[i][0]) !== -1) return B[i][1];
-  const m = d.match(/@([^.>]+)/);
-  return m ? m[1] : 'Otro banco';
-}
 
 function hojaTransf_() {
   const ss = libro_();
@@ -1765,52 +1531,6 @@ function ordenarItems_(items, orden) {
   });
 }
 
-/* ---------- Recuperación (ejecutar desde el editor) ---------- */
-
-/**
- * Ejecútala UNA vez después de pegar esta versión: vuelve a leer los correos que quedaron en
- * Notif_sin_procesar por formatos que antes no se entendían (compras en US$ y transferencias).
- * Solo agrega lo que no existe (mismo ID de correo), así que no duplica nada.
- */
-function reprocesarCorreos() {
-  const q = 'label:' + LABEL_PROCESADO + ' after:' + correoDesde_() +
-            ' ("US$" OR "ha instruido una transferencia" OR "ha efectuado una transferencia" OR "transferencia a tu cuenta" OR ' +
-            '"transferencia de fondos a tu cuenta" OR "te ha transferido" OR "te transfirió")';
-  let n = 0;
-  GmailApp.search(q, 0, 100).forEach(function (hilo) {
-    hilo.getMessages().forEach(function (msg) {
-      const texto = msg.getPlainBody().replace(/\s+/g, ' ').trim();
-      if (/compra por US\$/i.test(texto) && /bancochile|bancoedwards/i.test(msg.getFrom())) {
-        const p = parsearBChile_(texto);
-        if (p && agregarGasto_({ id: 'm-' + msg.getId(), monto: p.monto, descripcion: p.comercio, medio: p.medio,
-                                  categoria: '', fecha: p.fecha, origen: 'BChile auto' }) === 'ok') n++;
-      } else if (/transferencia/i.test(texto)) {
-        procesarCorreoTransf_(msg); n++;
-      }
-    });
-  });
-  Logger.log('Correos revisados y agregados (los que ya estaban se saltan): ' + n);
-}
-
-
-/**
- * Ejecútala después de liberar espacio: reintenta las notificaciones en respaldo y lee
- * todos los correos que quedaron sin procesar (varias pasadas, 30 hilos cada una).
- */
-function recuperar() {
-  Logger.log('Respaldo: ' + JSON.stringify(reintentarRespaldo_()));
-  for (let k = 0; k < 6; k++) revisarCorreos();
-  Logger.log('Listo. Revisa Pendientes en la app y la pestaña ' + SHEET_ERR + '.');
-}
-
-function probarTransferencias() {
-  Logger.log(JSON.stringify(parsearTransfEnviada_('Te informamos que has realizado una Transferencia a terceros en forma ' +
-    'exitosa con el siguiente detalle: Destino Nombre y Apellido Ana Pérez Rut 1-9 Monto $5.000 Mensaje ' +
-    'Fecha y Hora: lunes 19 de octubre de 2026 19:50')));
-  Logger.log(JSON.stringify(parsearTransfRecibida_('Informamos que con fecha 09/10/2026-15:42:22, nuestro(a) cliente ' +
-    'JUAN ANDRES SOTO DIAZ , ha instruido una transferencia de fondos con el siguiente detalle: Monto: $20.000')));
-}
-
 /* ---------- Utilidades ---------- */
 
 function hash_(s) {
@@ -1851,12 +1571,6 @@ function probarNotif() {
   Logger.log(JSON.stringify(r)); // esperado: {"ok":true,"procesado":true,"duplicado":false}
 }
 
-function probarCorreoParser() {
-  const r = parsearBChile_('Hola: Te informamos que se ha realizado una compra por $58.960 con ' +
-    'Tarjeta de Crédito ****5678 en MERPAGO*MCDONALDSCHI el 04/10/2026 17:41. Revisa Saldos...');
-  Logger.log(JSON.stringify(r)); // esperado: monto 58960, comercio MCDONALDSCHI, fecha 2026-10-04
-}
-
 function probarPresupuesto() {
   Logger.log(JSON.stringify(presupuestoMes_()));
 }
@@ -1884,24 +1598,17 @@ function claveValida_(k) {
   return !!guardada && String(k || '') === guardada;
 }
 
-function correoDesde_() {
-  if (CORREO_DESDE) return CORREO_DESDE;
-  const props = PropertiesService.getScriptProperties();
-  let f = props.getProperty('correo_desde');
-  if (!f) { f = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy/MM/dd'); props.setProperty('correo_desde', f); }
-  return f;
-}
-
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu('Gastos')
+  const menu = SpreadsheetApp.getUi().createMenu('Gastos')
     .addItem('Configurar', 'configurar')
     .addItem('Ver clave de la app', 'verClave')
-    .addSeparator()
-    .addItem('Activar lectura de correos del banco', 'activarCorreos')
-    .addItem('Desactivar lectura de correos', 'desactivarCorreos')
-    .addSeparator()
-    .addItem('Cambiar clave (desconecta los celulares)', 'cambiarClave')
-    .addToUi();
+    .addItem('Cambiar clave (desconecta los celulares)', 'cambiarClave');
+  if (typeof activarCorreos === 'function') {   // solo si pegaste Correos.gs
+    menu.addSeparator()
+      .addItem('Activar lectura de correos del banco', 'activarCorreos')
+      .addItem('Desactivar lectura de correos', 'desactivarCorreos');
+  }
+  menu.addToUi();
 }
 
 /** Crea las pestañas que falten y la clave. Se puede ejecutar varias veces sin borrar nada. */
@@ -1914,7 +1621,23 @@ function configurar() {
     g.setFrozenRows(1);
     g.getRange('I:I').setNumberFormat('@');
   }
-  hojaReglas_(); hojaDeudas_(); hojaPresupuesto_(); hojaIngresos_(); hojaTransf_(); hojaAlias_();
+  hojaDeudas_(); hojaIngresos_(); hojaTransf_(); hojaAlias_();
+  // Presupuesto base en 0 (se edita desde la app) y reglas de ejemplo, solo si esas pestañas están vacías
+  const pres = hojaPresupuesto_();
+  if (pres.getLastRow() < 2) {
+    pres.getRange('A:A').setNumberFormat('@');
+    const cats = ['_Ingreso'].concat(CATEGORIAS, ['_Ahorro']);
+    pres.getRange(2, 1, cats.length, 3).setValues(cats.map(function (c) { return ['base', c, 0]; }));
+  }
+  const reg = hojaReglas_();
+  if (reg.getLastRow() < 2) {
+    const ej = [['UBER', 'Transporte'], ['CABIFY', 'Transporte'], ['COPEC', 'Transporte'],
+                ['JUMBO', 'Supermercado'], ['LIDER', 'Supermercado'], ['UNIMARC', 'Supermercado'],
+                ['NETFLIX', 'Suscripciones'], ['SPOTIFY', 'Suscripciones'], ['CRUZ VERDE', 'Salud y cuidado personal'],
+                ['RAPPI', 'Comida fuera'], ['PEDIDOSYA', 'Comida fuera']]
+      .filter(function (r) { return CATEGORIAS.indexOf(r[1]) !== -1; });
+    if (ej.length) reg.getRange(2, 1, ej.length, 2).setValues(ej);
+  }
   clave_();
   avisar_('Listo. Ahora en Apps Script: Implementar → Nueva implementación → Aplicación web ' +
           '(Ejecutar como: Yo · Acceso: Cualquier usuario). Después usa "Gastos → Ver clave de la app".');
@@ -1927,20 +1650,6 @@ function verClave() {
 function cambiarClave() {
   PropertiesService.getScriptProperties().deleteProperty('api_key');
   verClave();
-}
-
-/** Lee cada 10 minutos los correos de compra y transferencias (hoy: Banco de Chile / Edwards y transferencias recibidas). */
-function activarCorreos() {
-  correoDesde_();
-  crearActivador();
-  avisar_('Lectura de correos activada desde ' + correoDesde_() + '. Revisa cada 10 minutos.');
-}
-
-function desactivarCorreos() {
-  ScriptApp.getProjectTriggers()
-    .filter(function (t) { return t.getHandlerFunction() === 'revisarCorreos'; })
-    .forEach(function (t) { ScriptApp.deleteTrigger(t); });
-  avisar_('Lectura de correos desactivada.');
 }
 
 function avisar_(msg) {
