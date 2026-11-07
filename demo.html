@@ -143,6 +143,28 @@
     .bqbox input{ flex:1; min-width:0; background:none; border:0; outline:none; color:var(--text); font:inherit; font-size:16px; padding:14px 0; }
     .bqbox button{ background:none; border:0; color:var(--muted); font-size:20px; padding:4px; cursor:pointer; }
     .bqmes[hidden]{ display:none; }
+    /* Tutorial */
+    .tour{ position:fixed; inset:0; z-index:80; }
+    .tour[hidden]{ display:none; }
+    .tour .bloq{ position:absolute; inset:0; }
+    .tour .foco{ position:absolute; border-radius:18px; box-shadow:0 0 0 9999px rgba(0,0,0,.66); outline:2px solid var(--accent);
+      outline-offset:2px; transition:top .28s, left .28s, width .28s, height .28s; pointer-events:none; }
+    .tour .foco.nada{ width:0; height:0; left:50%; top:45%; outline:0; }
+    .tour .tip{ position:absolute; left:16px; right:16px; background:var(--card); color:var(--text); border-radius:20px;
+      padding:16px 16px 12px; box-shadow:0 12px 40px rgba(0,0,0,.4); transition:top .28s; max-width:440px; margin:0 auto; }
+    .tour .tip .paso{ font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.04em; text-transform:uppercase; }
+    .tour .tip h3{ margin:4px 0 6px; font-size:18px; }
+    .tour .tip p{ margin:0; font-size:14.5px; line-height:1.45; color:var(--muted); }
+    .tour .tip p b{ color:var(--text); font-weight:600; }
+    .tour .tip .acc{ display:flex; align-items:center; gap:8px; margin-top:14px; }
+    .tour .tip .omitir{ background:none; border:0; color:var(--muted); font:inherit; font-size:14px; padding:10px 4px; cursor:pointer; margin-right:auto; }
+    .tour .tip .ant{ width:44px; height:44px; border-radius:50%; border:1.5px solid var(--line); background:none; color:var(--text); font-size:20px; cursor:pointer; }
+    .tour .tip .sig{ height:48px; min-width:48px; padding:0 18px; border-radius:24px; border:0; background:var(--accent); color:var(--ink);
+      font:inherit; font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px; cursor:pointer; }
+    .tour .tip .sig svg{ width:20px; height:20px; }
+    .tour .puntos{ display:flex; gap:4px; margin-top:12px; justify-content:center; }
+    .tour .puntos i{ width:6px; height:6px; border-radius:3px; background:var(--line-2); transition:width .2s; }
+    .tour .puntos i.on{ width:18px; background:var(--accent); }
     /* Tendencias */
     .tdcard{ background:var(--card); border-radius:22px; padding:16px 16px 12px; display:flex; flex-direction:column; gap:4px; margin-top:12px; }
     .tdcard .lbl{ font-size:14px; color:var(--muted); }
@@ -784,6 +806,23 @@
     </button>
   </nav>
 
+  <!-- ================= TUTORIAL ================= -->
+  <div class="tour" id="tour" hidden role="dialog" aria-modal="true" aria-labelledby="tourTit">
+    <div class="bloq"></div>
+    <div class="foco" id="tourFoco"></div>
+    <div class="tip" id="tourTip">
+      <div class="paso" id="tourPaso"></div>
+      <h3 id="tourTit"></h3>
+      <p id="tourTxt"></p>
+      <div class="acc">
+        <button class="omitir" id="tourOmitir">Omitir</button>
+        <button class="ant" id="tourAnt" aria-label="Paso anterior">‹</button>
+        <button class="sig" id="tourSig" aria-label="Siguiente paso"><span id="tourSigTxt"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      </div>
+      <div class="puntos" id="tourPuntos" aria-hidden="true"></div>
+    </div>
+  </div>
+
   <!-- ================= WIZARD ================= -->
   <div class="wiz" id="wiz">
     <div class="top">
@@ -947,6 +986,10 @@
         <button data-t="noche">Noche</button><button data-t="dia">Día</button><button data-t="auto">Automático</button>
       </div>
       <div class="q-sub" id="temaAyuda" style="margin-top:8px"></div>
+      <label style="margin-top:20px">Ayuda</label>
+      <button class="btn2" id="tourOpen" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg>
+        Ver tutorial de la app</button>
       <div style="height:1px;background:var(--line);margin:24px 0 20px"></div>
     </div>
     <div class="q">Conectar con tu planilla</div>
@@ -1906,6 +1949,112 @@
     $('tdClose').addEventListener('click', function(){ cerrarTend(); });
     $('tdRango').querySelectorAll('button').forEach(function(b){
       b.addEventListener('click', function(){ tdN = Number(b.dataset.n); LS.set('demo_gastos_td_n', tdN); renderTend(); });
+    });
+
+    /* =====================================================
+       TUTORIAL: recorrido paso a paso por la app
+       ===================================================== */
+    var TOUR = [
+      { vista:'v-inicio', sel:null, t:'Bienvenido a Gastos',
+        x:'Te muestro en un minuto qué hace cada parte de la app. Avanza con la <b>flecha</b> o toca <b>Omitir</b> cuando quieras.' },
+      { vista:'v-inicio', sel:'#cTot', t:'Tu mes de un vistazo',
+        x:'<b>Te quedan para variables</b>: lo que te queda del presupuesto de gastos del día a día. Los 20 cuadros muestran cuánto llevas gastado. <b>Tócala</b> para abrir Tendencias con los gráficos.' },
+      { vista:'v-inicio', sel:'#ingRow', t:'Libre del mes',
+        x:'Ingresos, ahorro y lo que queda libre después de todos los gastos. <b>Toca esta fila</b> para ver la resta paso a paso.' },
+      { vista:'v-inicio', sel:'#bPend', t:'Pendientes por revisar',
+        x:'Las compras que llegan solas desde el banco aparecen acá hasta que les pones categoría.' },
+      { vista:'v-inicio', sel:'#cCats', t:'Por categoría',
+        x:'Cuánto llevas en cada categoría este mes. En rojo las que se pasaron del presupuesto.' },
+      { vista:'v-inicio', sel:'#cMovs', t:'Últimos movimientos',
+        x:'Toca uno para ver el detalle, <b>editarlo</b>, dividirlo con otras personas o cambiar el mes al que cuenta. Con <b>🔍 Ver todos</b> buscas cualquier gasto por nombre, categoría, persona o monto.' },
+      { vista:'v-inicio', sel:'#gear', t:'Ajustes',
+        x:'Modo noche, día o automático, la conexión con tu planilla y este tutorial.' },
+      { vista:'v-inicio', sel:'#fab', t:'Registrar a mano',
+        x:'Para efectivo o lo que no avisa el banco: <b>gasto, ingreso o ahorro</b>. Puedes dividir un gasto entre varias personas o pagarlo en cuotas. Funciona sin señal: se envía cuando vuelve.' },
+      { vista:'v-pend', sel:'.tab[data-view="v-pend"]', t:'Pendientes',
+        x:'Compras de Santander y Banco de Chile y tus transferencias. Elige categoría, divide si fue compartido y marca <b>Recordar</b> para que ese comercio se categorice solo la próxima vez.' },
+      { vista:'v-pend', sel:'#plist', t:'Transferencias',
+        x:'Si te transfieren, eliges si es <b>pago de una deuda</b> (se reparte por ítem) o un ingreso. Si transfieres, si fue gasto, <b>ahorro</b>, préstamo o pago de lo que debías. Los traspasos entre tus cuentas se omiten solos.' },
+      { vista:'v-pres', sel:'.tab[data-view="v-pres"]', t:'Presupuesto',
+        x:'Cuánto llevas contra lo presupuestado en cada categoría. Los fijos aparecen con ✓ cuando ya se pagaron, aunque los hayas pagado a fin del mes anterior.' },
+      { vista:'v-pres', sel:'#tdOpen', t:'Tendencias',
+        x:'Gráficos de tus últimos meses, la proyección de cómo cierra este mes, la torta por categoría y tu ritmo de gasto día a día.' },
+      { vista:'v-pres', sel:'#peOpen', t:'Editar presupuesto',
+        x:'Define cuánto quieres gastar en cada categoría. Se repite todos los meses y puedes ajustar un mes puntual.' },
+      { vista:'v-deud', sel:'.tab[data-view="v-deud"]', t:'Deudas',
+        x:'Quién te debe y a quién le debes. Entra a una persona para <b>saldar</b>, abonar a un ítem, perdonar o cobrarle por WhatsApp.' },
+      { vista:'v-deud', sel:'#ndOpen', t:'Nueva deuda',
+        x:'Para préstamos sueltos que no vienen de un gasto dividido.' },
+      { vista:'v-inicio', sel:null, t:'¡Listo!',
+        x:'Puedes volver a ver este tutorial cuando quieras desde <b>⚙ Ajustes</b>.' }
+    ];
+    var tourI = 0, tourPasos = [];
+
+    function visible(elm){ if(!elm) return false; var r = elm.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
+
+    function abrirTour(){
+      setupEl.classList.remove('show');
+      tourI = 0; $('tour').hidden = false;
+      history.pushState({ capa:'tour' }, '');
+      mostrarPaso();
+    }
+    function cerrarTour(desdeAtras){
+      $('tour').hidden = true; irA('v-inicio');
+      try{ LS.set('demo_gastos_tour_visto', true); }catch(e){}
+      if(!desdeAtras && history.state && history.state.capa === 'tour') volverHistorial();
+    }
+
+    function mostrarPaso(dir){
+      dir = dir || 1;
+      var p = TOUR[tourI];
+      if(vistaActual !== p.vista) irA(p.vista);
+      var elm = p.sel ? document.querySelector('#' + p.vista + ' ' + p.sel) || document.querySelector(p.sel) : null;
+      // pasos cuyo elemento no está a la vista (ej. sin pendientes) se saltan
+      if(p.sel && !visible(elm)){
+        var sig = tourI + dir;
+        if(sig >= 0 && sig < TOUR.length){ tourI = sig; return mostrarPaso(dir); }
+      }
+      var total = TOUR.length;
+      $('tourPaso').textContent = 'Paso ' + (tourI + 1) + ' de ' + total;
+      $('tourTit').textContent = p.t;
+      $('tourTxt').innerHTML = p.x;
+      $('tourAnt').hidden = tourI === 0;
+      var ultimo = tourI === total - 1;
+      $('tourSigTxt').textContent = ultimo ? 'Terminar' : (tourI === 0 ? 'Empezar' : '');
+      $('tourSig').setAttribute('aria-label', ultimo ? 'Terminar tutorial' : 'Siguiente paso');
+      $('tourOmitir').hidden = ultimo;
+      var pts = $('tourPuntos'); pts.innerHTML = '';
+      for(var k = 0; k < total; k++) pts.appendChild(el('i', k === tourI ? 'on' : ''));
+
+      var foco = $('tourFoco'), tip = $('tourTip');
+      if(!elm){ foco.className = 'foco nada'; foco.removeAttribute('style'); tip.style.top = ''; tip.style.bottom = ''; tip.style.top = '30%'; return; }
+      foco.className = 'foco';
+      try{ elm.scrollIntoView({ block:'center', behavior:'instant' }); }catch(e){ elm.scrollIntoView(); }
+      setTimeout(function(){ ubicar(elm); }, 60);
+    }
+
+    function ubicar(elm){
+      var r = elm.getBoundingClientRect(), m = 6, H = window.innerHeight;
+      var foco = $('tourFoco'), tip = $('tourTip');
+      foco.style.left = (r.left - m) + 'px'; foco.style.top = (r.top - m) + 'px';
+      foco.style.width = (r.width + m * 2) + 'px'; foco.style.height = (r.height + m * 2) + 'px';
+      var alto = tip.offsetHeight || 220;
+      // la tarjeta va donde haya más espacio: abajo o arriba del elemento
+      var top = (H - r.bottom > r.top) ? Math.min(r.bottom + 18, H - alto - 12) : Math.max(r.top - alto - 18, 12);
+      tip.style.bottom = ''; tip.style.top = top + 'px';
+    }
+
+    $('tourOpen').addEventListener('click', abrirTour);
+    $('tourOmitir').addEventListener('click', function(){ cerrarTour(); });
+    $('tourSig').addEventListener('click', function(){
+      if(tourI >= TOUR.length - 1) return cerrarTour();
+      tourI++; mostrarPaso(1);
+    });
+    $('tourAnt').addEventListener('click', function(){ if(tourI > 0){ tourI--; mostrarPaso(-1); } });
+    window.addEventListener('resize', function(){
+      if($('tour').hidden) return;
+      var p = TOUR[tourI], elm = p.sel ? document.querySelector('#' + p.vista + ' ' + p.sel) || document.querySelector(p.sel) : null;
+      if(visible(elm)) ubicar(elm);
     });
 
     /* =====================================================
@@ -3637,6 +3786,7 @@
       if($('eg').classList.contains('show')){ cerrarEg(true); return; }
       if($('bq').classList.contains('show')){ cerrarBusq(true); return; }
       if($('td').classList.contains('show')){ cerrarTend(true); return; }
+      if(!$('tour').hidden){ cerrarTour(true); return; }
       if($('nd').classList.contains('show')){ cerrarNd(true); return; }
       if($('pe').classList.contains('show')){ cerrarPe(true); return; }
       if(personaAbierta && !wiz.classList.contains('show')){ cerrarPersona(true); return; }
