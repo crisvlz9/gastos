@@ -2,11 +2,11 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0E0E10">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Figtree:wght@400..800&display=swap" rel="stylesheet">
   <title>Gastos (demo)</title>
   <meta name="robots" content="noindex">
   <script>
@@ -15,6 +15,9 @@
       var t = 'noche'; try{ t = JSON.parse(localStorage.getItem('demo_gastos_tema')) || 'noche'; }catch(e){}
       var claro = t === 'dia' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
       document.documentElement.setAttribute('data-theme', claro ? 'light' : 'dark');
+      // Diseño: 'bloques' (el original) o 'tinta' (el nuevo). Se elige en Ajustes.
+      var d = 'bloques'; try{ d = JSON.parse(localStorage.getItem('demo_gastos_diseno')) || 'bloques'; }catch(e){}
+      document.documentElement.setAttribute('data-design', d === 'tinta' ? 'tinta' : 'bloques');
     })();
   </script>
   <style>
@@ -711,6 +714,162 @@
     /* Filas de Presupuesto: el nombre se corta antes que el monto */
     .catrow .r span:first-child{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .catrow .r span:last-child{ font-size:13px; white-space:nowrap; flex:none; }
+    .setup{ overflow-y:auto; }
+
+    /* =========================================================
+       DISEÑO "TINTA" (opcional, se elige en Ajustes → Diseño)
+       Plano, con listas y una sola tipografía. Tiene modo noche y día.
+       Todo va bajo [data-design="tinta"], así el diseño "Bloques" queda intacto.
+       ========================================================= */
+    :root[data-design="tinta"]{
+      color-scheme:dark;
+      --bg:#0B1020; --card:#141B2E; --card-2:#1A2238; --card-3:#222C45; --line:#242E4A; --line-2:#3A4670; --nav:#10172A;
+      --text:#EEF1F8; --muted:#9BA6C0; --ink:#0B1020;
+      --accent:#8FB0FF; --accent-dim:#1A2748; --accent-text:#A9C2FF; --on-accent:#0B1020;
+      --good:#7FD9A2; --good-dim:#10261C; --good-line:#1D4030; --good-fill:#7FD9A2;
+      --over:#FF9A8B; --over-dim:#2B1818; --over-line:#4C2A28;
+      --sav:#C3A6FF; --pace:#FFB454;
+      --hero:transparent; --hero-soft:#222C45; --hero-2:#9BA6C0; --on-hero:#8FB0FF; --link:#A9C2FF;
+      --danger:#FF7B7B; --warn:#FFCF70; --warn-bg:#2A2212; --warn-line:#473A1C;
+      --sel:#242E4A; --seg-on:#2B3757; --track:#222C45; --card-cat:#141B2E; --shadow:rgba(0,0,0,.5);
+      --font:'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --mono:var(--font);
+    }
+    :root[data-design="tinta"][data-theme="light"] {
+      color-scheme:light;
+      --bg:#F3F5F9; --card:#FFFFFF; --card-2:#EBEEF5; --card-3:#E3E7F0; --line:#DDE2EC; --line-2:#B9C1D3; --nav:#FFFFFF;
+      --text:#0F172A; --muted:#566076; --ink:#0F172A;
+      --accent:#2447C9; --accent-dim:#E4EAFB; --accent-text:#2447C9; --on-accent:#FFFFFF;
+      --good:#1B7A45; --good-dim:#E3F3EA; --good-line:#B9DEC8; --good-fill:#9FDDB8;
+      --over:#BF3626; --over-dim:#FBE9E6; --over-line:#F0C3BC;
+      --sav:#6B3FD0; --pace:#B05800;
+      --hero:transparent; --hero-soft:#E3E7F0; --hero-2:#566076; --on-hero:#2447C9; --link:#2447C9;
+      --danger:#C42B2B; --warn:#805300; --warn-bg:#FFF2D1; --warn-line:#EFD9A0;
+      --sel:#E3E7F0; --seg-on:#FFFFFF; --track:#E3E7F0; --card-cat:#FFFFFF; --shadow:rgba(15,23,42,.12);
+    }
+
+    /* --- Base: foco visible, toque sin retardo, menos movimiento si el teléfono lo pide --- */
+    :root[data-design="tinta"] body { -webkit-font-smoothing:antialiased; }
+    :root[data-design="tinta"] button, :root[data-design="tinta"] a, :root[data-design="tinta"] label, :root[data-design="tinta"] .mov, :root[data-design="tinta"] .prow, :root[data-design="tinta"] .ihead, :root[data-design="tinta"] .banner { touch-action:manipulation; }
+    :root[data-design="tinta"] :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    :root[data-design="tinta"] #amount:focus-visible, :root[data-design="tinta"] input.text:focus-visible, :root[data-design="tinta"] .bqbox input:focus-visible { outline:none; }
+    :root[data-design="tinta"] h1, :root[data-design="tinta"] h2, :root[data-design="tinta"] .q { text-wrap:balance; }
+    @media (prefers-reduced-motion: reduce){
+      :root[data-design="tinta"] *, :root[data-design="tinta"] *::before, :root[data-design="tinta"] *::after { transition-duration:.01ms !important; animation-duration:.01ms !important; }
+    }
+
+    /* --- Tipografía: una sola familia; los montos usan cifras tabulares para alinearse --- */
+    :root[data-design="tinta"] .big, :root[data-design="tinta"] .tdcard .big, :root[data-design="tinta"] .tdcol .v, :root[data-design="tinta"] .tdleg .m, :root[data-design="tinta"] .tdleg .p, :root[data-design="tinta"] .tddonut .c b, :root[data-design="tinta"] .hero-foot b, :root[data-design="tinta"] .ingdet .f b, :root[data-design="tinta"] .ritem .rm {
+      font-family:var(--font); font-variant-numeric:tabular-nums; letter-spacing:-.02em;
+    }
+    :root[data-design="tinta"] .big, :root[data-design="tinta"] .mov .a, :root[data-design="tinta"] .item .mto, :root[data-design="tinta"] .prow .a, :root[data-design="tinta"] .dmov .a, :root[data-design="tinta"] .frow .v, :root[data-design="tinta"] .tot b, :root[data-design="tinta"] .ingrow b,
+    :root[data-design="tinta"] .catrow .r span:last-child, :root[data-design="tinta"] #amount, :root[data-design="tinta"] .tile .amt, :root[data-design="tinta"] .prs .fld, :root[data-design="tinta"] .erow .fld, :root[data-design="tinta"] #ndMonto, :root[data-design="tinta"] #egMonto { letter-spacing:-.02em; }
+    :root[data-design="tinta"] .vhead { padding:20px 4px 14px; }
+    :root[data-design="tinta"] .vhead h1 { font-size:26px; font-weight:800; letter-spacing:-.03em; }
+    :root[data-design="tinta"] .sec-h h2 { font-size:16px; font-weight:700; }
+    :root[data-design="tinta"] .q { font-size:24px; font-weight:800; letter-spacing:-.025em; }
+    :root[data-design="tinta"] #amount { font-size:60px; font-weight:800; letter-spacing:-.04em; }
+    :root[data-design="tinta"] .tour .tip .paso, :root[data-design="tinta"] .bqdia { text-transform:none; letter-spacing:0; font-size:13px; font-weight:600; }
+
+    /* --- Superficies: planas, con borde fino en vez de bloques de color --- */
+    :root[data-design="tinta"] .card { border:1px solid var(--line); border-radius:18px; }
+    :root[data-design="tinta"] .item { border:1px solid var(--line); border-radius:18px; }
+    :root[data-design="tinta"] .item.open { border-color:var(--line-2); box-shadow:none; }
+    :root[data-design="tinta"] .tdcard { border:1px solid var(--line); border-radius:18px; }
+    :root[data-design="tinta"] .mdet { background:var(--card-2); border:0; border-radius:12px; }
+    :root[data-design="tinta"] .banner { border-radius:14px; }
+    :root[data-design="tinta"] .banner.warn { background:var(--warn-bg); color:var(--warn); border-color:var(--warn-line); font-weight:600; }
+    :root[data-design="tinta"] .banner.info { border-color:var(--line); }
+    :root[data-design="tinta"] .cic { border-radius:12px; }
+    :root[data-design="tinta"] .tag-over { background:var(--over-dim); color:var(--over); border:1px solid var(--over-line); border-radius:999px; }
+
+    /* --- Resumen del mes: el monto va directo sobre el fondo, sin tarjeta de color --- */
+    :root[data-design="tinta"] .card.hero { background:none; border:0; border-radius:0; padding:2px 4px 6px; color:var(--text); }
+    :root[data-design="tinta"] .card.hero .lbl { color:var(--muted); font-size:14px; font-weight:500; }
+    :root[data-design="tinta"] .card.hero .big { color:var(--text); font-size:48px; font-weight:800; letter-spacing:-.04em; margin-top:4px; }
+    :root[data-design="tinta"] .card.hero .sub, :root[data-design="tinta"] .hero-foot { color:var(--muted); }
+    :root[data-design="tinta"] .hero-foot b { color:var(--text); }
+    :root[data-design="tinta"] .pill { background:var(--card-3); color:var(--text); border-radius:999px; padding:6px 12px; }
+    :root[data-design="tinta"] .segbar { gap:0; margin:16px 0 10px; border-radius:5px; overflow:hidden; background:var(--track); }
+    :root[data-design="tinta"] .segbar span { height:10px; border-radius:0; background:none; }
+    :root[data-design="tinta"] .segbar span.on { background:var(--accent); }
+    :root[data-design="tinta"] .segbar.over span.on { background:var(--over); }
+    :root[data-design="tinta"] .card.hero .bar { background:var(--track); }
+    :root[data-design="tinta"] .card.hero .bar b { background:var(--text); opacity:.7; }
+    :root[data-design="tinta"] .card.hero .ingrow { border-top-color:var(--line); color:var(--muted); min-height:44px; }
+    :root[data-design="tinta"] .card.hero .ingrow b { color:var(--text); }
+    :root[data-design="tinta"] .card.hero .ingrow .inc { color:var(--good); }
+    :root[data-design="tinta"] .card.hero .ingrow .sav { color:var(--sav); }
+    :root[data-design="tinta"] .ingdet { background:var(--card); border:1px solid var(--line); color:var(--muted); }
+    :root[data-design="tinta"] .ingdet .f b { color:var(--text); }
+    :root[data-design="tinta"] .ingdet .f.tot { border-top-color:var(--line); color:var(--text); }
+
+    /* --- Por categoría: lista de una columna en vez de mosaico --- */
+    :root[data-design="tinta"] .tiles { display:block; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:2px 16px; }
+    :root[data-design="tinta"] .tile {
+      display:grid; grid-template-columns:36px minmax(0,1fr) auto; column-gap:12px; row-gap:1px; align-items:center;
+      width:100%; background:none; border:0; border-radius:0; padding:12px 0; min-height:60px;
+    }
+    :root[data-design="tinta"] .tile + .tile { border-top:1px solid var(--line); }
+    :root[data-design="tinta"] .tile .th { display:contents; }
+    :root[data-design="tinta"] .tile .cic { grid-column:1; grid-row:1 / span 2; }
+    :root[data-design="tinta"] .tile .nm { grid-column:2; grid-row:1; color:var(--text); font-size:15px; font-weight:600; }
+    :root[data-design="tinta"] .tile .pc { grid-column:2; grid-row:2; font-size:12.5px; }
+    :root[data-design="tinta"] .tile .amt { grid-column:3; grid-row:1; font-size:16px; text-align:right; }
+    :root[data-design="tinta"] .tile .tag-over { grid-column:3; grid-row:2; justify-self:end; padding:1px 8px; }
+    :root[data-design="tinta"] .tile.over .amt { color:var(--over); }
+    :root[data-design="tinta"] .tiles .empty { padding:28px 10px; }
+
+    /* --- Barra inferior: fija al borde y con el nombre de cada pestaña --- */
+    :root[data-design="tinta"] nav {
+      left:0; right:0; bottom:0; max-width:none; height:auto; border-radius:0; box-shadow:none;
+      border:0; border-top:1px solid var(--line); padding:6px 8px calc(env(safe-area-inset-bottom) + 6px);
+    }
+    :root[data-design="tinta"] .view { padding-bottom:calc(env(safe-area-inset-bottom) + 96px); }
+    :root[data-design="tinta"] .tab { font-size:11px; font-weight:600; gap:2px; min-height:52px; }
+    :root[data-design="tinta"] .tab .ti { width:56px; height:30px; border-radius:15px; }
+    :root[data-design="tinta"] .tab.on { color:var(--accent-text); }
+    :root[data-design="tinta"] .tab.on .ti { background:var(--accent-dim); }
+    :root[data-design="tinta"] .badge { top:-2px; left:calc(50% + 8px); color:var(--on-accent); }
+    :root[data-design="tinta"] .fab { width:52px; height:52px; border-radius:18px; color:var(--on-accent); }
+
+    /* --- Botones y controles --- */
+    :root[data-design="tinta"] button.primary, :root[data-design="tinta"] a.primary { border-radius:14px; color:var(--on-accent); }
+    :root[data-design="tinta"] .btn2 { background:var(--card); border:1px solid var(--line); border-radius:12px; min-height:40px; }
+    :root[data-design="tinta"] .btn2.acc { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+    :root[data-design="tinta"] .btn2.on { border-color:var(--accent); }
+    :root[data-design="tinta"] .gear, :root[data-design="tinta"] .back { border:1px solid var(--line); background:var(--card); border-radius:14px; }
+    :root[data-design="tinta"] .gear.add { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+    :root[data-design="tinta"] .opt { background:var(--card); border:1px solid var(--line); border-radius:14px; }
+    :root[data-design="tinta"] .opt.sel { background:var(--accent-dim); border-color:var(--accent); color:var(--text); font-weight:700; }
+    :root[data-design="tinta"] .opt.cat { border:1.5px solid var(--line); background:var(--card); border-radius:16px; min-height:88px; }
+    :root[data-design="tinta"] .opt.cat.sel { background:var(--accent-dim); border-color:var(--accent); }
+    :root[data-design="tinta"] .item .opt.cat { min-height:84px; }
+    :root[data-design="tinta"] .chip { background:var(--card); border:1px solid var(--line); border-radius:999px; min-height:40px; padding:8px 14px; }
+    :root[data-design="tinta"] .chip.sel { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+    :root[data-design="tinta"] .seg { background:var(--card-2); border-radius:12px; padding:3px; }
+    :root[data-design="tinta"] .seg button { border-radius:9px; min-height:40px; }
+    :root[data-design="tinta"] .seg button.on { background:var(--seg-on); color:var(--text); box-shadow:0 1px 2px var(--shadow); }
+    :root[data-design="tinta"] .seg.neg button.on { background:var(--over-dim); color:var(--over); }
+    :root[data-design="tinta"] .tdseg { background:var(--card-2); border-radius:12px; }
+    :root[data-design="tinta"] .tdseg button { border-radius:9px; min-height:36px; }
+    :root[data-design="tinta"] .tdseg button.on { background:var(--seg-on); box-shadow:0 1px 2px var(--shadow); }
+    :root[data-design="tinta"] .fld, :root[data-design="tinta"] .pat, :root[data-design="tinta"] .setup input { border-radius:12px; border-color:var(--line-2); font-size:16px; }
+    :root[data-design="tinta"] .datepill { border-radius:14px; border-color:var(--line-2); font-family:var(--font); font-weight:600; }
+    :root[data-design="tinta"] .bqbox { border-radius:14px; border-width:1px; border-color:var(--line-2); }
+    :root[data-design="tinta"] .bqmes button { width:44px; height:44px; border-radius:14px; border:1px solid var(--line); background:var(--card); }
+    :root[data-design="tinta"] .prs .del { width:44px; height:44px; }
+    :root[data-design="tinta"] .split .tog, :root[data-design="tinta"] .split .body { border-radius:14px; }
+    :root[data-design="tinta"] .cobro { border-radius:14px; }
+    :root[data-design="tinta"] .cobro a { border-radius:10px; }
+    :root[data-design="tinta"] .perdon { border-radius:14px; }
+    :root[data-design="tinta"] .ritem .rp.on { color:var(--on-accent); }
+    :root[data-design="tinta"] .dot.active { background:var(--accent); }
+
+    /* --- Tutorial --- */
+    :root[data-design="tinta"] .tour .tip { border-radius:18px; border:1px solid var(--line); }
+    :root[data-design="tinta"] .tour .tip .sig { border-radius:14px; color:var(--on-accent); }
+    :root[data-design="tinta"] .tour .tip .ant { border-radius:14px; border-width:1px; }
   </style>
 </head>
 <body>
@@ -981,8 +1140,13 @@
   <div class="setup" id="setup">
     <div id="temaBox">
       <div class="q">Ajustes</div>
-      <label>Apariencia</label>
-      <div class="seg tri" id="temaSeg">
+      <label id="disLbl">Diseño</label>
+      <div class="seg" id="disSeg" role="group" aria-labelledby="disLbl">
+        <button data-d="bloques">Bloques</button><button data-d="tinta">Tinta</button>
+      </div>
+      <div class="q-sub" id="disAyuda" style="margin-top:8px"></div>
+      <label id="temaLbl">Apariencia</label>
+      <div class="seg tri" id="temaSeg" role="group" aria-labelledby="temaLbl">
         <button data-t="noche">Noche</button><button data-t="dia">Día</button><button data-t="auto">Automático</button>
       </div>
       <div class="q-sub" id="temaAyuda" style="margin-top:8px"></div>
@@ -3177,7 +3341,7 @@
       big.appendChild(document.createTextNode(fmtMonto(Math.abs(quedan)) + ' '));
       var de = el('span', 'sub', 'de ' + fmtMonto(totVar)); de.style.fontSize = '14px'; de.style.fontWeight = '400'; de.style.letterSpacing = '0';
       big.appendChild(de); c0.appendChild(big);
-      c0.appendChild(barra(totVar ? gasVar / totVar : 1, ritmo, quedan < 0 ? 'var(--over)' : '#FFFFFF', true));
+      c0.appendChild(barra(totVar ? gasVar / totVar : 1, ritmo, quedan < 0 ? 'var(--over)' : 'var(--on-hero)', true));
       var restantes = D - d + 1;
       c0.appendChild(el('div', 'sub', 'Día ' + d + ' de ' + D +
         (quedan > 0 ? ' · puedes gastar ~' + fmtMonto(Math.floor(quedan / restantes)) + ' al día' : '') +
@@ -3670,12 +3834,22 @@
       var t = LS.get('demo_gastos_tema', 'noche');
       var claro = t === 'dia' || (t === 'auto' && temaMQ && temaMQ.matches);
       document.documentElement.setAttribute('data-theme', claro ? 'light' : 'dark');
-      var mc = document.querySelector('meta[name="theme-color"]'); if(mc) mc.setAttribute('content', claro ? '#F4F3EF' : '#0E0E10');
-      $('temaSeg').querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.t === t); });
+      var d = LS.get('demo_gastos_diseno', 'bloques') === 'tinta' ? 'tinta' : 'bloques';
+      document.documentElement.setAttribute('data-design', d);
+      var fondo = d === 'tinta' ? (claro ? '#F3F5F9' : '#0B1020') : (claro ? '#F4F3EF' : '#0E0E10');
+      var mc = document.querySelector('meta[name="theme-color"]'); if(mc) mc.setAttribute('content', fondo);
+      $('temaSeg').querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.t === t); b.setAttribute('aria-pressed', b.dataset.t === t); });
+      $('disSeg').querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.d === d); b.setAttribute('aria-pressed', b.dataset.d === d); });
+      $('disAyuda').textContent = d === 'tinta'
+        ? 'Tinta: plano, con listas y pestañas con nombre.'
+        : 'Bloques: el diseño original, con tarjetas de color.';
       $('temaAyuda').textContent = t === 'auto' ? 'Sigue el modo claro u oscuro del teléfono.' : '';
     }
     $('temaSeg').querySelectorAll('button').forEach(function(b){
       b.addEventListener('click', function(){ LS.set('demo_gastos_tema', b.dataset.t); aplicarTema(); });
+    });
+    $('disSeg').querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click', function(){ LS.set('demo_gastos_diseno', b.dataset.d); aplicarTema(); });
     });
     if(temaMQ){ var alCambiar = function(){ if(LS.get('demo_gastos_tema', 'noche') === 'auto') aplicarTema(); };
       if(temaMQ.addEventListener) temaMQ.addEventListener('change', alCambiar); else if(temaMQ.addListener) temaMQ.addListener(alCambiar); }
