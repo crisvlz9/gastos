@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0E0E10">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Figtree:wght@400..800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Figtree:wght@400..800&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap" rel="stylesheet">
   <title>Gastos</title>
   <script>
     // Tema: 'noche' (por defecto), 'dia' o 'auto' (sigue al teléfono). Se aplica antes de pintar para que no parpadee.
@@ -14,9 +14,9 @@
       var t = 'noche'; try{ t = JSON.parse(localStorage.getItem('gastos_tema')) || 'noche'; }catch(e){}
       var claro = t === 'dia' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
       document.documentElement.setAttribute('data-theme', claro ? 'light' : 'dark');
-      // Diseño: 'bloques' (el original) o 'tinta' (el nuevo). Se elige en Ajustes.
+      // Diseño: 'bloques' (el original), 'tinta' o 'mosaico'. Se elige en Ajustes.
       var d = 'bloques'; try{ d = JSON.parse(localStorage.getItem('gastos_diseno')) || 'bloques'; }catch(e){}
-      document.documentElement.setAttribute('data-design', d === 'tinta' ? 'tinta' : 'bloques');
+      document.documentElement.setAttribute('data-design', d === 'tinta' || d === 'mosaico' ? d : 'bloques');
     })();
   </script>
   <link rel="manifest" href="manifest.json">
@@ -881,6 +881,138 @@
     :root[data-design="tinta"] .tour .tip { border-radius:18px; border:1px solid var(--line); }
     :root[data-design="tinta"] .tour .tip .sig { border-radius:14px; color:var(--on-accent); }
     :root[data-design="tinta"] .tour .tip .ant { border-radius:14px; border-width:1px; }
+
+    /* =========================================================
+       DISEÑO "MOSAICO" (opcional, se elige en Ajustes → Diseño)
+       Conserva las tarjetas de color por categoría de Bloques, ahora de color pleno.
+       Todo lo demás es blanco y negro: el color queda solo para las categorías.
+       ========================================================= */
+    :root[data-design="mosaico"]{
+      color-scheme:dark;
+      --bg:#121316; --card:#1C1D22; --card-2:#24262C; --card-3:#2D2F36; --line:#2D2F36; --line-2:#474A53; --nav:#1C1D22;
+      --text:#F3F3F0; --muted:#A4A7B0; --ink:#15161A;
+      --accent:#F3F3F0; --accent-dim:#2D2F36; --accent-text:#F3F3F0; --on-accent:#15161A;
+      --good:#8FE0A8; --good-dim:#13251A; --good-line:#22402D; --good-fill:#8FE0A8;
+      --over:#FF9A8B; --over-dim:#2B1918; --over-line:#4C2B28;
+      --sav:#B7A8FF; --pace:#FFB454;
+      --hero:#F3F3F0; --hero-soft:#CFD0D4; --hero-2:#50535B; --on-hero:#15161A; --hero-over:#C4372A; --link:#F3F3F0;
+      --danger:#FF7B7B; --warn:#FFCF70; --warn-bg:#2A2313; --warn-line:#473B1D;
+      --sel:#2D2F36; --seg-on:#3A3D45; --track:#2D2F36; --card-cat:#1C1D22; --shadow:rgba(0,0,0,.5);
+      --font:'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --disp:'Bricolage Grotesque', 'Figtree', system-ui, sans-serif;
+      --mono:var(--font);
+    }
+    :root[data-design="mosaico"][data-theme="light"] {
+      color-scheme:light;
+      --bg:#F1F2F4; --card:#FFFFFF; --card-2:#E8E9ED; --card-3:#E0E2E7; --line:#DEE0E5; --line-2:#BFC2CA; --nav:#FFFFFF;
+      --text:#15161A; --muted:#5C606A; --ink:#15161A;
+      --accent:#15161A; --accent-dim:#E3E4E9; --accent-text:#15161A; --on-accent:#FFFFFF;
+      --good:#1B7A45; --good-dim:#E3F3EA; --good-line:#B9DEC8; --good-fill:#9FDDB8;
+      --over:#BF3626; --over-dim:#FBE9E6; --over-line:#F0C3BC;
+      --sav:#5646CF; --pace:#B05800;
+      --hero:#15161A; --hero-soft:#3D4048; --hero-2:#C5C7CF; --on-hero:#FFFFFF; --hero-over:#FF9A8B; --link:#15161A;
+      --danger:#C42B2B; --warn:#7A5000; --warn-bg:#FFF2D1; --warn-line:#EFD9A0;
+      --sel:#E3E4E9; --seg-on:#FFFFFF; --track:#E0E2E7; --card-cat:#FFFFFF; --shadow:rgba(21,22,26,.14);
+    }
+
+    /* --- Base: foco visible, menos movimiento si el teléfono lo pide --- */
+    :root[data-design="mosaico"] body { -webkit-font-smoothing:antialiased; }
+    :root[data-design="mosaico"] :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    :root[data-design="mosaico"] #amount:focus-visible, :root[data-design="mosaico"] input.text:focus-visible, :root[data-design="mosaico"] .bqbox input:focus-visible { outline:none; }
+    :root[data-design="mosaico"] h1, :root[data-design="mosaico"] h2, :root[data-design="mosaico"] .q { text-wrap:balance; }
+    @media (prefers-reduced-motion: reduce){
+      :root[data-design="mosaico"] *, :root[data-design="mosaico"] *::before, :root[data-design="mosaico"] *::after { transition-duration:.01ms !important; animation-duration:.01ms !important; }
+    }
+    @media (hover:hover){
+      :root[data-design="mosaico"] .btn2:hover, :root[data-design="mosaico"] .opt:hover, :root[data-design="mosaico"] .chip:hover { border-color:var(--line-2); }
+      :root[data-design="mosaico"] button.primary:hover, :root[data-design="mosaico"] .fab:hover, :root[data-design="mosaico"] .btn2.acc:hover { opacity:.88; }
+      :root[data-design="mosaico"] .tab:hover { color:var(--text); }
+    }
+
+    /* --- Tipografía: títulos y montos grandes con carácter; el resto, una sans tranquila --- */
+    :root[data-design="mosaico"] .vhead h1, :root[data-design="mosaico"] .q, :root[data-design="mosaico"] .card.hero .big, :root[data-design="mosaico"] #amount, :root[data-design="mosaico"] .tdcard .big, :root[data-design="mosaico"] .tile .amt, :root[data-design="mosaico"] .card .big, :root[data-design="mosaico"] .tddonut .c b {
+      font-family:var(--disp); font-variant-numeric:tabular-nums;
+    }
+    :root[data-design="mosaico"] .tdcol .v, :root[data-design="mosaico"] .tdleg .m, :root[data-design="mosaico"] .tdleg .p, :root[data-design="mosaico"] .hero-foot b, :root[data-design="mosaico"] .ingdet .f b, :root[data-design="mosaico"] .ritem .rm {
+      font-family:var(--font); font-variant-numeric:tabular-nums; letter-spacing:-.01em;
+    }
+    :root[data-design="mosaico"] .mov .a, :root[data-design="mosaico"] .item .mto, :root[data-design="mosaico"] .prow .a, :root[data-design="mosaico"] .dmov .a, :root[data-design="mosaico"] .frow .v, :root[data-design="mosaico"] .tot b, :root[data-design="mosaico"] .ingrow b,
+    :root[data-design="mosaico"] .catrow .r span:last-child, :root[data-design="mosaico"] .prs .fld, :root[data-design="mosaico"] .erow .fld, :root[data-design="mosaico"] #ndMonto, :root[data-design="mosaico"] #egMonto { letter-spacing:-.01em; }
+    :root[data-design="mosaico"] .vhead h1 { font-size:28px; font-weight:700; letter-spacing:-.03em; }
+    :root[data-design="mosaico"] #v-pres .vhead h1 { font-size:24px; }
+    :root[data-design="mosaico"] .sec-h h2 { font-size:16px; font-weight:700; }
+    :root[data-design="mosaico"] .q { font-size:25px; font-weight:700; letter-spacing:-.025em; }
+    :root[data-design="mosaico"] #amount { font-size:62px; font-weight:700; letter-spacing:-.04em; }
+    :root[data-design="mosaico"] .tour .tip .paso, :root[data-design="mosaico"] .bqdia { text-transform:none; letter-spacing:0; font-size:13px; font-weight:600; }
+
+    /* --- Tarjeta principal: bloque invertido (negro de día, claro de noche) --- */
+    :root[data-design="mosaico"] .card.hero { background:var(--hero); color:var(--on-hero); border:0; border-radius:26px; padding:22px; }
+    :root[data-design="mosaico"] .card.hero .lbl, :root[data-design="mosaico"] .card.hero .sub, :root[data-design="mosaico"] .hero-foot { color:var(--hero-2); }
+    :root[data-design="mosaico"] .card.hero .big { color:var(--on-hero); font-size:46px; font-weight:700; letter-spacing:-.04em; }
+    :root[data-design="mosaico"] .hero-foot b { color:var(--on-hero); }
+    :root[data-design="mosaico"] .pill { background:color-mix(in srgb, var(--on-hero) 14%, transparent); color:var(--on-hero); border-radius:999px; padding:6px 12px; }
+    :root[data-design="mosaico"] .segbar span { background:var(--hero-soft); border-radius:3px; }
+    :root[data-design="mosaico"] .segbar span.on { background:var(--on-hero); }
+    :root[data-design="mosaico"] .segbar.over span.on { background:var(--hero-over); }
+    :root[data-design="mosaico"] .card.hero .bar { background:var(--hero-soft); }
+    :root[data-design="mosaico"] .card.hero .bar b { background:var(--on-hero); }
+    :root[data-design="mosaico"] .card.hero .ingrow { border-top-color:color-mix(in srgb, var(--on-hero) 20%, transparent); color:var(--hero-2); }
+    :root[data-design="mosaico"] .card.hero .ingrow b, :root[data-design="mosaico"] .card.hero .ingrow .inc, :root[data-design="mosaico"] .card.hero .ingrow .sav { color:var(--on-hero); }
+    :root[data-design="mosaico"] .ingdet { background:color-mix(in srgb, var(--on-hero) 9%, transparent); color:var(--hero-2); }
+    :root[data-design="mosaico"] .ingdet .f b { color:var(--on-hero); }
+    :root[data-design="mosaico"] .ingdet .f.tot { border-top-color:color-mix(in srgb, var(--on-hero) 22%, transparent); color:var(--on-hero); }
+
+    /* --- Tarjetas por categoría: se conservan, con el color pleno de cada categoría --- */
+    :root[data-design="mosaico"] .tile { background:var(--c); border:0; border-radius:22px; padding:14px; color:var(--ink); gap:4px; }
+    :root[data-design="mosaico"] .tile .nm { color:var(--ink); font-size:13.5px; font-weight:700; }
+    :root[data-design="mosaico"] .tile .amt { color:var(--ink); font-size:23px; font-weight:700; letter-spacing:-.03em; line-height:1.05; }
+    :root[data-design="mosaico"] .tile .pc { color:color-mix(in srgb, var(--ink) 72%, var(--c)); font-weight:500; }
+    :root[data-design="mosaico"] .tile .th { margin-bottom:6px; }
+    :root[data-design="mosaico"] .tile .cic, :root[data-design="mosaico"] .opt.cat.sel .cic { background:color-mix(in srgb, var(--ink) 12%, transparent) !important; }
+    :root[data-design="mosaico"] .tile.over { box-shadow:inset 0 0 0 2.5px var(--ink); }
+    :root[data-design="mosaico"] .tile .tag-over { background:var(--ink); color:#fff; border-radius:999px; }
+    :root[data-design="mosaico"] .cic { border-radius:50%; }
+
+    /* --- Superficies --- */
+    :root[data-design="mosaico"] .card { border:0; border-radius:22px; }
+    :root[data-design="mosaico"] .item { border:0; border-radius:22px; }
+    :root[data-design="mosaico"] .tdcard { border-radius:22px; }
+    :root[data-design="mosaico"] .banner { border-radius:16px; }
+    :root[data-design="mosaico"] .banner.warn { background:var(--warn-bg); color:var(--warn); border-color:var(--warn-line); font-weight:600; }
+    :root[data-design="mosaico"] .mdet { background:var(--card-2); border:0; border-radius:14px; }
+
+    /* --- Barra inferior flotante --- */
+    :root[data-design="mosaico"] nav { border-color:var(--line); }
+    :root[data-design="mosaico"] .tab.on { color:var(--text); }
+    :root[data-design="mosaico"] .tab.on .ti { background:var(--sel); }
+    :root[data-design="mosaico"] .badge { color:var(--on-accent); }
+    :root[data-design="mosaico"] .fab { color:var(--on-accent); }
+
+    /* --- Botones y controles: negro sobre blanco (o al revés de noche) --- */
+    :root[data-design="mosaico"] button.primary, :root[data-design="mosaico"] a.primary { border-radius:999px; color:var(--on-accent); }
+    :root[data-design="mosaico"] .btn2 { border:1px solid transparent; border-radius:999px; min-height:40px; }
+    :root[data-design="mosaico"] .btn2.acc { color:var(--on-accent); }
+    :root[data-design="mosaico"] .gear.add { color:var(--on-accent); }
+    :root[data-design="mosaico"] .opt { border:1px solid transparent; }
+    :root[data-design="mosaico"] .opt.sel { color:var(--on-accent); }
+    :root[data-design="mosaico"] .opt.cat { border:2px solid var(--card-2); border-radius:20px; }
+    :root[data-design="mosaico"] .opt.cat.sel { background:var(--c); border-color:var(--c); color:var(--ink); }
+    :root[data-design="mosaico"] .chip { border:1px solid transparent; border-radius:999px; min-height:40px; padding:8px 14px; }
+    :root[data-design="mosaico"] .chip.sel { color:var(--on-accent); }
+    :root[data-design="mosaico"] .seg, :root[data-design="mosaico"] .tdseg { background:var(--card-2); }
+    :root[data-design="mosaico"] .seg button.on, :root[data-design="mosaico"] .tdseg button.on { box-shadow:0 1px 2px var(--shadow); }
+    :root[data-design="mosaico"] .seg button { min-height:40px; }
+    :root[data-design="mosaico"] .seg button.on { background:var(--seg-on); color:var(--text); }
+    :root[data-design="mosaico"] .seg.neg button.on { background:var(--over-dim); color:var(--over); }
+    :root[data-design="mosaico"] .tdseg button.on { background:var(--seg-on); }
+    :root[data-design="mosaico"] .tdseg button { min-height:36px; }
+    :root[data-design="mosaico"] .fld, :root[data-design="mosaico"] .pat, :root[data-design="mosaico"] .setup input { font-size:16px; border-color:var(--line-2); }
+    :root[data-design="mosaico"] .datepill { font-family:var(--font); font-weight:600; border-color:var(--line-2); }
+    :root[data-design="mosaico"] .bqmes button { width:44px; height:44px; }
+    :root[data-design="mosaico"] .prs .del { width:44px; height:44px; }
+    :root[data-design="mosaico"] .ritem .rp.on { color:var(--on-accent); }
+    :root[data-design="mosaico"] .tour .tip .sig { color:var(--on-accent); }
+    :root[data-design="mosaico"] .linkbtn, :root[data-design="mosaico"] .vermas { text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--line-2); }
   </style>
 </head>
 <body>
@@ -1152,8 +1284,8 @@
     <div id="temaBox">
       <div class="q">Ajustes</div>
       <label id="disLbl">Diseño</label>
-      <div class="seg" id="disSeg" role="group" aria-labelledby="disLbl">
-        <button data-d="bloques">Bloques</button><button data-d="tinta">Tinta</button>
+      <div class="seg tri" id="disSeg" role="group" aria-labelledby="disLbl">
+        <button data-d="bloques">Bloques</button><button data-d="tinta">Tinta</button><button data-d="mosaico">Mosaico</button>
       </div>
       <div class="q-sub" id="disAyuda" style="margin-top:8px"></div>
       <label id="temaLbl">Apariencia</label>
@@ -3606,14 +3738,14 @@
       var t = LS.get('gastos_tema', 'noche');
       var claro = t === 'dia' || (t === 'auto' && temaMQ && temaMQ.matches);
       document.documentElement.setAttribute('data-theme', claro ? 'light' : 'dark');
-      var d = LS.get('gastos_diseno', 'bloques') === 'tinta' ? 'tinta' : 'bloques';
+      var d = LS.get('gastos_diseno', 'bloques'); if(d !== 'tinta' && d !== 'mosaico') d = 'bloques';
       document.documentElement.setAttribute('data-design', d);
-      var fondo = d === 'tinta' ? (claro ? '#F3F5F9' : '#0B1020') : (claro ? '#F4F3EF' : '#0E0E10');
+      var fondo = d === 'tinta' ? (claro ? '#F3F5F9' : '#0B1020') : d === 'mosaico' ? (claro ? '#F1F2F4' : '#121316') : (claro ? '#F4F3EF' : '#0E0E10');
       var mc = document.querySelector('meta[name="theme-color"]'); if(mc) mc.setAttribute('content', fondo);
       $('temaSeg').querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.t === t); b.setAttribute('aria-pressed', b.dataset.t === t); });
       $('disSeg').querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.d === d); b.setAttribute('aria-pressed', b.dataset.d === d); });
-      $('disAyuda').textContent = d === 'tinta'
-        ? 'Tinta: plano, con listas y pestañas con nombre.'
+      $('disAyuda').textContent = d === 'tinta' ? 'Tinta: plano, con listas y pestañas con nombre.'
+        : d === 'mosaico' ? 'Mosaico: tarjetas de color pleno por categoría; el resto en blanco y negro.'
         : 'Bloques: el diseño original, con tarjetas de color.';
       $('temaAyuda').textContent = t === 'auto' ? 'Sigue el modo claro u oscuro del teléfono.' : '';
     }
