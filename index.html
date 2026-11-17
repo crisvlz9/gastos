@@ -1650,7 +1650,7 @@
       if(!lista.length){ box.appendChild(el('div', 'empty', 'Todavía no hay gastos este mes.')); }
       lista.forEach(function(x){
         var nocat = x.c === 'Sin categoría', ppto = PE[x.c] || 0, pasado = ppto && x.m > ppto;
-        var t = el(nocat ? 'button' : 'div', 'tile' + (pasado ? ' over' : ''));
+        var t = el('button', 'tile' + (pasado ? ' over' : ''));
         t.style.setProperty('--c', estiloCat(x.c).c);
         var th = el('div', 'th'); th.appendChild(iconoCat(x.c));
         if(pasado) th.appendChild(el('span', 'tag-over', 'Excedido'));
@@ -1661,7 +1661,12 @@
           nocat ? 'Toca para categorizar'
           : ppto ? Math.round(x.m / ppto * 100) + '% de ' + fmtMonto(ppto)
           : total ? Math.round(x.m / total * 100) + '% del mes' : ''));
-        if(nocat){ t.type = 'button'; t.addEventListener('click', function(){ irA('v-pend'); }); }
+        t.type = 'button';
+        if(nocat) t.addEventListener('click', function(){ irA('v-pend'); });
+        else {
+          t.setAttribute('aria-label', 'Ver gastos de ' + x.c + ': ' + fmtMonto(x.m));
+          t.addEventListener('click', function(){ abrirBusq({ mes:mes, categoria:x.c }); });
+        }
         box.appendChild(t);
       });
 
@@ -3297,7 +3302,15 @@
         rs.style.cursor = 'pointer'; rs.addEventListener('click', function(){ irA('v-pend'); });
         c1.appendChild(rs);
       }
-      conGasto.forEach(function(c){ c1.appendChild(filaPres(c, G[c], E[c] || 0, ritmo)); });
+      function verCat(row, c){
+        row.style.cursor = 'pointer'; row.setAttribute('role', 'button'); row.tabIndex = 0;
+        row.setAttribute('aria-label', 'Ver gastos de ' + c);
+        var ir = function(){ abrirBusq({ mes:mes, categoria:c }); };
+        row.addEventListener('click', ir);
+        row.addEventListener('keydown', function(e){ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); ir(); } });
+        return row;
+      }
+      conGasto.forEach(function(c){ c1.appendChild(verCat(filaPres(c, G[c], E[c] || 0, ritmo), c)); });
       var sinGasto = vars.filter(function(c){ return !G[c] && E[c]; });
       if(!conGasto.length && !G['Sin categoría']) c1.appendChild(el('div', 'sub', 'Aún no hay gastos este mes.'));
       if(sinGasto.length){
@@ -3320,7 +3333,7 @@
         else if(!g) v = el('div', 'v zero', 'pendiente · ' + fmtMonto(e));
         else if(g > e) v = el('div', 'v st-r', fmtMonto(g) + ' de ' + fmtMonto(e));
         else v = el('div', 'v zero', fmtMonto(g) + ' de ' + fmtMonto(e));
-        r.appendChild(v); c2.appendChild(r);
+        r.appendChild(v); c2.appendChild(g ? verCat(r, c) : r);
       });
       box.appendChild(c2);
 
