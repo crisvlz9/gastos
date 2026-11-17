@@ -478,6 +478,14 @@
 
     /* Dividir gasto */
     .split{ margin-top:14px; }
+    .sep .prow2{ display:grid; grid-template-columns:minmax(0,1fr) 116px 36px; gap:8px; align-items:center; margin-top:8px; }
+    .sep .prow2 select{ appearance:none; -webkit-appearance:none; min-width:0; }
+    .sep .prow2 .q{ width:36px; height:36px; border-radius:50%; border:0; background:var(--card-2); color:var(--muted); font-size:18px; cursor:pointer; }
+    .sep .resto{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 12px; border-radius:12px;
+      background:var(--card-2); font-size:13.5px; }
+    .sep .resto b{ font-family:var(--mono); }
+    .sep .resto.mal b{ color:var(--over); }
+    .sep .mas{ background:none; border:0; color:var(--link); font:inherit; font-size:14px; font-weight:600; padding:10px 0 0; cursor:pointer; }
     .split .tog{ background:none; border:1px dashed var(--line); color:var(--muted); border-radius:12px;
       padding:12px; width:100%; font-size:14px; cursor:pointer; }
     .split .body{ border:1px solid var(--accent); border-radius:14px; padding:12px; background:var(--card); }
@@ -1254,6 +1262,7 @@
       <div class="chips" id="egMedios" style="margin-top:0"></div>
     </div>
     <div id="egSplit" style="margin-top:16px"></div>
+    <div id="egSep"></div>
     <label class="flbl">Categoría</label>
     <div class="opts cats" id="egCats"></div>
     <div class="msg" id="egMsg" aria-live="polite"></div>
@@ -2191,12 +2200,24 @@
         egDiv.setTotal(enCuotas ? Number(u.bruto || u.monto) * Number(u.cuotas) : (u.bruto || u.monto));
         sp.appendChild(egDiv.el);
       }
+      // Separar en categorías (no para cuotas ni gastos ya divididos con personas)
+      var ss = $('egSep'); ss.innerHTML = ''; egSep = null;
+      if(tipo === 'Gasto' && !dividido && !enCuotas && !u.cola){
+        egSep = crearSeparacion(function(on){ sp.style.display = on ? 'none' : ''; });
+        egSep.setTotal(u.bruto || u.monto); egSep.setPrincipal(egCat);
+        sp.style.display = '';
+        ss.appendChild(egSep.el);
+      }
       pintarEgOpciones();
       $('eg').classList.add('show'); $('eg').scrollTop = 0;
       history.pushState({ capa:'eg' }, '');
     }
-    var egDiv = null, egListo = false; // egListo: el botón Guardar quedó como "Listo" tras dividir
-    $('egMonto').addEventListener('input', function(){ if(egDiv) egDiv.setTotal(Number($('egMonto').value.replace(/\D/g, ''))); });
+    var egDiv = null, egSep = null, egListo = false; // egListo: el botón Guardar quedó como "Listo" tras dividir
+    $('egMonto').addEventListener('input', function(){
+      var n = Number($('egMonto').value.replace(/\D/g, ''));
+      if(egDiv) egDiv.setTotal(n);
+      if(egSep) egSep.setTotal(n);
+    });
     function cerrarEg(desdeAtras){
       $('eg').classList.remove('show');
       if(!desdeAtras && history.state && history.state.capa === 'eg') volverHistorial();
@@ -2220,6 +2241,7 @@
         b.addEventListener('click', function(){
           cb.querySelectorAll('.opt').forEach(function(x){ x.classList.remove('sel'); });
           b.classList.add('sel'); egCat = c;
+          if(egSep) egSep.setPrincipal(c);
         });
         cb.appendChild(b);
       });
@@ -2243,11 +2265,13 @@
       var desc = $('egDesc').value.trim(), monto = Number($('egMonto').value.replace(/\D/g, ''));
       if(!desc){ $('egMsg').textContent = 'Falta la descripción.'; return; }
       if(!monto){ $('egMsg').textContent = 'Falta el monto.'; return; }
-      var division = null;
-      if(egDiv){ try{ division = egDiv.get(); }catch(e){ $('egMsg').textContent = e.message; return; } }
+      var division = null, partes = null;
+      try{ if(egSep) partes = egSep.get(); }catch(e){ $('egMsg').textContent = e.message; return; }
+      if(egDiv && !partes){ try{ division = egDiv.get(); }catch(e){ $('egMsg').textContent = e.message; return; } }
       var b = $('egSave'); b.disabled = true; b.textContent = 'Guardando…'; $('egMsg').textContent = '';
       var payload = { action:'editar', id:u.id, descripcion:desc, categoria:egCat, fecha:$('egFecha').value || u.fecha };
       if(division) payload.division = division;
+      if(partes) payload.partes = partes;
       if(esGasto(u)) payload.medio = egMedio;
       if(u.tipo === 'Ingreso' || (esGasto(u) && !$('egMesBox').hidden)){
         // si cambió la fecha, el mes elegido debe seguir siendo el de la fecha o el siguiente
@@ -2261,6 +2285,8 @@
           b.disabled = false; b.textContent = 'Guardar cambios';
           if(!j.ok){ $('egMsg').textContent = errorServidor(j, 'No se pudo guardar.'); return; }
           if(division && !j.dividido){ $('egMsg').textContent = 'Se guardó, pero el servidor no creó la división: falta crear una "Nueva versión" de Codigo.gs.'; return; }
+          if(partes && !j.separado){ $('egMsg').textContent = 'Se guardó, pero no se separó en categorías: falta crear una "Nueva versión" de Codigo.gs.'; return; }
+          if(partes){ trasEditar(); return; } // las partes nuevas llegan con la recarga
           borrarBorrador('eg-' + u.id);
           // Se refleja al tiro; la recarga lo confirma
           var suf = (String(u.descripcion || '').match(SUF_CUOTA) || [''])[0];
@@ -2406,22 +2432,28 @@
         nomBox.appendChild(nom);
         var div = crearDivision(it.id); div.setTotal(it.monto);
         var cuo = crearCuotas();
+        // Separar en categorías: no se combina con dividir entre personas, cuotas ni recordar regla
+        var sep = crearSeparacion(function(on){
+          [div.el, cuo.el, rec].forEach(function(x){ x.style.display = on ? 'none' : ''; });
+          if(on){ chk.checked = false; pat.hidden = true; }
+        });
+        sep.setTotal(it.monto);
         var catSel = '';
         var guardar = el('button', 'primary pguardar', 'Elige una categoría'); guardar.disabled = true;
         cfg.categorias.forEach(function(c){
           var b = botonCat(c);
           b.addEventListener('click', function(){
             grid.querySelectorAll('.opt').forEach(function(x){ x.classList.remove('sel'); });
-            b.classList.add('sel'); catSel = c;
+            b.classList.add('sel'); catSel = c; sep.setPrincipal(c);
             guardar.disabled = false; guardar.textContent = 'Guardar gasto';
           });
           grid.appendChild(b);
         });
         guardar.addEventListener('click', function(){
           if(!catSel) return;
-          var dv; try{ dv = div.get(); }catch(e){ alert(e.message); return; }
+          var dv, partes; try{ partes = sep.get(); dv = partes ? null : div.get(); }catch(e){ alert(e.message); return; }
           var nn = nom.value.trim();
-          categorizar(it, catSel, item, chk.checked, pat.value, dv, cuo.get(), nn && nn !== it.descripcion ? nn : undefined);
+          categorizar(it, catSel, item, partes ? false : chk.checked, pat.value, dv, partes ? 1 : cuo.get(), nn && nn !== it.descripcion ? nn : undefined, partes);
         });
         rec.appendChild(chk);
         rec.appendChild(document.createTextNode('Recordar la categoría para este comercio'));
@@ -2438,6 +2470,7 @@
         pGasto.appendChild(nomBox);
         if(/cr[eé]dito/i.test(it.medio || '')){ pGasto.appendChild(cuo.el); cuo.el.style.margin = '0 0 12px'; }
         pGasto.appendChild(div.el); div.el.style.margin = '0 0 12px';
+        pGasto.appendChild(sep.el); sep.el.style.margin = '0 0 12px';
         pGasto.appendChild(grid); pGasto.appendChild(rec); pGasto.appendChild(pat); pGasto.appendChild(guardar);
 
         if(it.clase === 'recibida') armarRecibida(it, item, body);
@@ -2711,11 +2744,12 @@
       renderPendientes(); actualizarBadges();
     }
 
-    function categorizar(it, cat, item, recordar, patron, division, cuotas, nombre){
+    function categorizar(it, cat, item, recordar, patron, division, cuotas, nombre, partes){
       item.classList.add('busy');
-      postAccion({ action:'categorizar', id:it.id, categoria:cat, recordar:recordar, patron:patron, division:division || null, cuotas:cuotas, descripcion:nombre })
+      postAccion({ action:'categorizar', id:it.id, categoria:cat, recordar:recordar, patron:patron, division:division || null, cuotas:cuotas, descripcion:nombre, partes:partes || null })
         .then(function(j){
           if(!j.ok){ item.classList.remove('busy'); alert('No se pudo guardar: ' + j.error); return; }
+          if(partes && !j.separado){ item.classList.remove('busy'); alert('Se guardó con una sola categoría: falta crear una "Nueva versión" de Codigo.gs para separar en categorías.'); }
           if(nombre) it.descripcion = nombre;
           if(division && division.length > 1){
             cobro = { texto: it.descripcion + ': ' + division.length + ' personas te deben ' + fmtMonto(totalDivision(division)),
@@ -3510,6 +3544,78 @@
     function borrarBorrador(id){
       if(!id) return;
       var b = leerBorradores(); if(b[id]){ delete b[id]; LS.set(BORR_KEY, b); }
+    }
+
+    /**
+     * Separar una compra en varias categorías (ej. supermercado + un regalo).
+     * La categoría elegida en la grilla se lleva el resto; aquí se agregan las otras con su monto.
+     * get() → null si no se usa, o [{categoria, monto}, …] con la principal primero.
+     */
+    function crearSeparacion(alCambiar){
+      var total = 0, principal = '', activo = false, partes = []; // partes: [{categoria, monto}]
+      var w = el('div', 'split sep');
+      var tog = el('button', 'tog', '+ Separar en categorías'); tog.type = 'button';
+      var body = el('div', 'body'); body.hidden = true;
+      body.appendChild(el('label', 'flbl', 'Una parte del gasto fue de otra categoría'));
+      var resto = el('div', 'resto'); body.appendChild(resto);
+      var lista = el('div'); body.appendChild(lista);
+      var mas = el('button', 'mas', '+ Agregar otra categoría'); mas.type = 'button'; body.appendChild(mas);
+      var hint = el('div', 'hint', 'Cada parte queda como un movimiento propio, con la misma fecha y nombre.'); body.appendChild(hint);
+      var x = el('button', 'x', 'Quitar separación'); x.type = 'button'; body.appendChild(x);
+      w.appendChild(tog); w.appendChild(body);
+
+      function suma(){ return partes.reduce(function(a, p){ return a + (Number(p.monto) || 0); }, 0); }
+      function pintarResto(){
+        var r = total - suma();
+        resto.innerHTML = '';
+        resto.appendChild(el('span', '', (principal || 'Categoría elegida arriba') + ' (el resto)'));
+        resto.appendChild(el('b', '', r < 0 ? '− ' + fmtMonto(-r) : fmtMonto(r)));
+        resto.classList.toggle('mal', r <= 0 || !principal);
+      }
+      function pintar(){
+        lista.innerHTML = '';
+        partes.forEach(function(p, i){
+          var f = el('div', 'prow2');
+          var sel = document.createElement('select'); sel.className = 'fld'; sel.setAttribute('aria-label', 'Categoría de la parte ' + (i + 2));
+          var o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'Categoría…'; sel.appendChild(o0);
+          cfg.categorias.forEach(function(c){ var o = document.createElement('option'); o.value = c; o.textContent = c; if(c === p.categoria) o.selected = true; sel.appendChild(o); });
+          sel.addEventListener('change', function(){ p.categoria = sel.value; pintarResto(); });
+          var inp = el('input', 'fld'); inp.inputMode = 'numeric'; inp.placeholder = '$0'; inp.setAttribute('aria-label', 'Monto de la parte ' + (i + 2));
+          inp.value = p.monto ? '$' + Number(p.monto).toLocaleString('es-CL') : '';
+          montoInput(inp);
+          inp.addEventListener('input', function(){ p.monto = Number(inp.value.replace(/\D/g, '')) || 0; pintarResto(); });
+          var q = el('button', 'q', '×'); q.type = 'button'; q.setAttribute('aria-label', 'Quitar esta parte');
+          q.addEventListener('click', function(){ partes.splice(i, 1); if(!partes.length) return apagar(); pintar(); });
+          f.appendChild(sel); f.appendChild(inp); f.appendChild(q);
+          lista.appendChild(f);
+        });
+        pintarResto();
+      }
+      function encender(){ activo = true; tog.hidden = true; body.hidden = false; if(!partes.length) partes.push({ categoria:'', monto:0 }); pintar(); if(alCambiar) alCambiar(true); }
+      function apagar(){ activo = false; partes = []; tog.hidden = false; body.hidden = true; if(alCambiar) alCambiar(false); }
+      tog.addEventListener('click', encender);
+      x.addEventListener('click', apagar);
+      mas.addEventListener('click', function(){ partes.push({ categoria:'', monto:0 }); pintar(); });
+      return {
+        el: w,
+        activo: function(){ return activo; },
+        setTotal: function(n){ total = Number(n) || 0; if(activo) pintarResto(); },
+        setPrincipal: function(c){ principal = c || ''; if(activo) pintarResto(); },
+        get: function(){
+          if(!activo) return null;
+          if(!principal) throw new Error('Elige arriba la categoría principal del gasto.');
+          var vistas = {}; vistas[principal] = 1;
+          partes.forEach(function(p){
+            if(!p.categoria) throw new Error('Elige la categoría de cada parte.');
+            if(!(p.monto > 0)) throw new Error('Indica el monto de cada parte.');
+            if(vistas[p.categoria]) throw new Error('"' + p.categoria + '" aparece dos veces.');
+            vistas[p.categoria] = 1;
+          });
+          var r = total - suma();
+          if(r <= 0) throw new Error('Las partes no pueden sumar ' + fmtMonto(total) + ' o más: a ' + principal + ' le tiene que quedar algo.');
+          return [{ categoria:principal, monto:r }].concat(partes.map(function(p){ return { categoria:p.categoria, monto:p.monto }; }));
+        }
+      };
     }
 
     function crearDivision(idBorr){

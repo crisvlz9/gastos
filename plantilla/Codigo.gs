@@ -317,6 +317,13 @@ function categorizar_(d) {
     // Nombre corregido desde Pendientes (antes de crear deudas o cuotas, que lo copian)
     if (d.descripcion && String(d.descripcion).trim()) sh.getRange(fila, COL.DESC).setValue(String(d.descripcion).trim());
 
+    // Una compra con varias categorías (ej. supermercado + un regalo): se separa en filas
+    if (partesValidas_(d.partes).length) {
+      if (divisiones_(d.division).length || Number(d.cuotas) > 1) throw new Error('Separar en categorías no se puede combinar con dividir entre personas ni con cuotas.');
+      separarFila_(sh, fila, d.partes);
+      return { ok: true, aplicadas: 0, separado: d.partes.length };
+    }
+
     if (divisiones_(d.division).length) {
       const r = sh.getRange(fila, 1, 1, 8).getValues()[0];
       crearDeudasDeGasto_(d.id, d.division, String(r[COL.DESC - 1]), isoFecha_(r[COL.FECHA - 1], Session.getScriptTimeZone()));
@@ -334,6 +341,44 @@ function categorizar_(d) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/** [{categoria, monto}] con al menos 2 partes de monto positivo. */
+function partesValidas_(partes) {
+  const l = [].concat(partes || []).filter(function (x) {
+    return x && String(x.categoria || '').trim() && Number(String(x.monto).replace(/\D/g, '')) > 0;
+  });
+  return l.length >= 2 ? l : [];
+}
+
+/**
+ * Separa una fila de Gastos en varias categorías. La primera parte se queda en la fila original
+ * (mismo ID, así un correo reprocesado no la duplica); las demás son filas nuevas con ID <id>-s2, -s3…
+ * La suma de las partes debe ser el monto de la fila. No toma el lock (lo hace quien la llama).
+ */
+function separarFila_(sh, fila, partes) {
+  partes = partesValidas_(partes).map(function (x) {
+    return { categoria: String(x.categoria).trim(), monto: Math.round(Number(String(x.monto).replace(/\D/g, ''))) };
+  });
+  if (partes.length < 2) throw new Error('Indica al menos dos categorías con su monto.');
+  const r = sh.getRange(fila, 1, 1, 9).getValues()[0];
+  const total = Math.round(Number(r[COL.MONTO - 1]) || 0);
+  const suma = partes.reduce(function (a, x) { return a + x.monto; }, 0);
+  if (suma !== total) throw new Error('Las partes suman $' + suma.toLocaleString('es-CL') + ' y el gasto es de $' + total.toLocaleString('es-CL') + '.');
+  const id = String(r[COL.ID - 1] || '');
+  if (!id) throw new Error('Ese gasto no tiene ID.');
+
+  sh.getRange(fila, COL.MONTO).setValue(partes[0].monto);
+  sh.getRange(fila, COL.CAT).setValue(partes[0].categoria);
+  let k = 2;
+  const nuevas = partes.slice(1).map(function (x) {
+    while (buscarFila_(sh, id + '-s' + k)) k++;
+    const fil = [r[COL.FECHA - 1], r[COL.DESC - 1], x.monto, r[COL.MEDIO - 1], x.categoria, new Date(), id + '-s' + k, r[COL.ORIGEN - 1], r[COL.MES - 1]];
+    k++;
+    return fil;
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, nuevas.length, 9).setValues(nuevas);
+  return partes.length;
 }
 
 /**
@@ -1143,6 +1188,14 @@ function editarGasto_(d) {
     if (deudas.length) {
       const shD = hojaDeudas_();
       deudas.forEach(function (x) { shD.getRange(x.fila, DCOL.DETALLE).setValue(desc); });
+    }
+
+    // Separar en categorías un gasto ya guardado
+    if (partesValidas_(d.partes).length) {
+      if (grupo.length > 1) throw new Error('Es una compra en cuotas: no se puede separar en categorías.');
+      if (deudas.length || divisiones_(d.division).length) throw new Error('El gasto está dividido con otras personas: no se puede separar en categorías.');
+      separarFila_(sh, fila, d.partes);
+      return { ok: true, separado: d.partes.length };
     }
 
     // Dividir un gasto que ya estaba guardado (ej. lo categorizó una regla antes de que alcanzaras a dividirlo)
