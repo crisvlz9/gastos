@@ -1335,11 +1335,11 @@
     var VAR = ['Supermercado','Comida fuera','Salidas y entretención','Transporte','Salud y cuidado personal',
                'Hogar','Tecnología','Ropa y estilo','Regalos','Viajes','Educación','Otros'];
     var FIJ = ['Vivienda','Suscripciones','CAE','Banco'];
-    // Presupuesto base cero de un profesional joven que vive solo en Ñuñoa (Santiago), sueldo líquido $1.300.000
-    var base = { 'Supermercado':175000, 'Comida fuera':115000, 'Salidas y entretención':80000, 'Transporte':65000,
-      'Salud y cuidado personal':45000, 'Hogar':20000, 'Tecnología':20000, 'Ropa y estilo':25000, 'Regalos':20000,
-      'Viajes':15000, 'Educación':10000, 'Otros':5500, 'Vivienda':475000, 'Suscripciones':30000, 'CAE':62000,
-      'Banco':7500, '_Ingreso':1300000, '_Ahorro':130000 };
+    // Presupuesto base cero de alguien que arrienda una pieza en depto compartido (Santiago Centro), sueldo líquido $800.000
+    var base = { 'Supermercado':155000, 'Comida fuera':50000, 'Salidas y entretención':45000, 'Transporte':50000,
+      'Salud y cuidado personal':20000, 'Hogar':15000, 'Tecnología':10000, 'Ropa y estilo':20000, 'Regalos':15000,
+      'Viajes':12000, 'Educación':10000, 'Otros':5000, 'Vivienda':270000, 'Suscripciones':15000, 'CAE':45000,
+      'Banco':3000, '_Ingreso':800000, '_Ahorro':60000 };
     var ajustes = {};
 
     // Generador determinista del mes (mismos datos en cada recarga dentro del mes)
@@ -1356,57 +1356,52 @@
     function g(d, desc, cat, monto, medio, extra){ if(d <= diasMesG) G.push([d, desc, cat, monto, medio, extra]); }
 
     // Fijos del mes
-    g(1, 'Arriendo depto 1D', 'Vivienda', 340000, 'Transferencia');
-    g(2, 'Comisión mantención cuenta', 'Banco', 7380, 'Débito');
+    g(1, 'Arriendo pieza depto compartido', 'Vivienda', 220000, 'Transferencia');
+    g(2, 'Comisión mantención cuenta', 'Banco', 2490, 'Débito');
     g(3, 'Spotify', 'Suscripciones', 4950, 'Crédito');
-    g(4, 'Gimnasio', 'Salud y cuidado personal', 21990, 'Crédito');
-    g(5, 'Gastos comunes', 'Vivienda', 64800, 'Transferencia');
-    g(8, 'Cuenta de luz', 'Vivienda', 23400, 'Débito');
-    g(9, 'Netflix', 'Suscripciones', 8890, 'Crédito');
-    g(10, 'Internet hogar', 'Vivienda', 19990, 'Crédito');
-    g(10, 'Cuota CAE', 'CAE', 61850, 'Transferencia');
-    g(12, 'Cuenta del agua', 'Vivienda', 9870, 'Débito');
-    g(14, 'Plan celular', 'Suscripciones', 12990, 'Crédito');
-    g(15, 'Cuenta del gas', 'Vivienda', 14600, 'Débito');
-    g(18, 'Google One', 'Suscripciones', 1990, 'Crédito');
+    g(5, 'Gastos comunes (mi parte)', 'Vivienda', 24500, 'Transferencia');
+    g(10, 'Cuentas del depto (mi parte)', 'Vivienda', entre(19000, 24000, 100), 'Transferencia');
+    g(10, 'Cuota CAE', 'CAE', 44850, 'Transferencia');
+    g(14, 'Plan celular', 'Suscripciones', 9990, 'Crédito');
 
     // Gastos puntuales del mes
-    g(7, 'Farmacia', 'Salud y cuidado personal', entre(7500, 13500), 'Débito');
-    g(11, 'Sodimac', 'Hogar', p90(9000, 15000), 'Débito');
-    g(13, 'Audífonos bluetooth', 'Tecnología', 19990, 'Crédito', { bruto:59970, cuotas:3, cuota:1 });
-    g(17, 'Polerón', 'Ropa y estilo', 24990, 'Crédito');
+    g(7, 'Farmacia', 'Salud y cuidado personal', entre(6000, 10000), 'Débito');
+    g(11, 'Ferretería', 'Hogar', p90(5000, 9000), 'Débito');
+    g(13, 'Audífonos bluetooth', 'Tecnología', 9990, 'Crédito', { bruto:29970, cuotas:3, cuota:1 });
+    g(17, 'Polera', 'Ropa y estilo', 12990, 'Débito');
     g(19, 'Curso online', 'Educación', 9990, 'Crédito');
-    g(20, 'Corte de pelo', 'Salud y cuidado personal', 12000, 'Débito');
-    g(21, 'Regalo cumpleaños', 'Regalos', p90(14000, 19000), 'Débito');
-    g(23, 'Artículos de aseo', 'Hogar', entre(5500, 8500), 'Débito');
+    g(20, 'Corte de pelo', 'Salud y cuidado personal', 8000, 'Efectivo');
+    g(21, 'Regalo cumpleaños', 'Regalos', p90(10000, 14000), 'Débito');
+    g(23, 'Artículos de aseo', 'Hogar', entre(4500, 7000), 'Débito');
     g(25, 'Pasaje bus a Valparaíso', 'Viajes', 11800, 'Débito');
     g(26, 'Trámite notaría', 'Otros', 4200, 'Débito');
 
-    // Día a día
+    // Día a día: lleva almuerzo casi siempre, cocina en casa y sale poco
     var semanaSuper = 0;
     for(var d = 1; d <= diasMesG; d++){
       var dw = new Date(Y, M, d).getDay();
       if(dw === 1) g(d, 'Carga Bip!', 'Transporte', 9000, 'Débito');
-      if(dw === 4 || (dw === 2 && rnd() < 0.5)) g(d, elegir(['Menú del día','Almuerzo oficina','Almuerzo con el equipo','Ensalada']), 'Comida fuera', entre(7900, 10500, 100), 'Débito');
-      if((dw === 1 || dw === 3 || dw === 5) && rnd() < 0.35) g(d, 'Café', 'Comida fuera', elegir([2900, 3200, 3500, 3900]), 'Débito');
-      if(dw === 3 && rnd() < 0.4) g(d, 'Pan y almacén', 'Supermercado', entre(2800, 5800, 100), 'Débito');
-      if(dw === 5 && d !== primerViernes && rnd() < 0.35) g(d, 'Cervezas after office', 'Salidas y entretención', entre(11000, 17000, 500), 'Débito');
+      if(dw === 4 && rnd() < 0.6) g(d, elegir(['Menú del día','Colación casino','Almuerzo con el equipo']), 'Comida fuera', entre(6500, 8500, 100), 'Débito');
+      if((dw === 1 || dw === 3 || dw === 5) && rnd() < 0.2) g(d, 'Café', 'Comida fuera', elegir([2500, 2800, 3200]), 'Débito');
+      if(dw === 3 && rnd() < 0.4) g(d, 'Pan y almacén', 'Supermercado', entre(2500, 5000, 100), 'Débito');
+      if(dw === 5 && d !== primerViernes && rnd() < 0.25) g(d, 'Cervezas after office', 'Salidas y entretención', entre(8000, 12000, 500), 'Débito');
       if(dw === 6){
         semanaSuper++;
-        if(semanaSuper % 2 === 1) g(d, elegir(['Supermercado Líder','Jumbo']), 'Supermercado', entre(38000, 46000), 'Crédito');
-        else g(d, 'Unimarc', 'Supermercado', entre(18000, 24000), 'Débito');
-        if(semanaSuper % 2 === 0){ g(d, 'Bar con amigos', 'Salidas y entretención', entre(17000, 24000, 500), 'Crédito');
-          g(d, 'Uber a casa', 'Transporte', entre(6200, 8800), 'Crédito'); }
+        if(semanaSuper % 2 === 1) g(d, 'Supermercado Líder', 'Supermercado', entre(32000, 40000), 'Débito');
+        else g(d, elegir(['Unimarc','Santa Isabel']), 'Supermercado', entre(14000, 20000), 'Débito');
+        if(semanaSuper === 2) g(d, 'Previa en casa de amigos', 'Salidas y entretención', entre(6000, 9000, 500), 'Débito');
+        if(semanaSuper === 4){ g(d, 'Bar con amigos', 'Salidas y entretención', entre(14000, 18000, 500), 'Crédito');
+          g(d, 'Uber a casa', 'Transporte', entre(5800, 7600), 'Crédito'); }
       }
       if(dw === 0){
-        if(semanaSuper % 2 === 1) g(d, 'Feria', 'Supermercado', entre(7000, 10000, 500), 'Efectivo');
-        else g(d, elegir(['Sushi delivery','Pizza delivery','Hamburguesas delivery']), 'Comida fuera', entre(15500, 21500, 100), 'Crédito');
+        if(semanaSuper === 3) g(d, elegir(['Pizza delivery','Sushi delivery']), 'Comida fuera', entre(12000, 15000, 100), 'Crédito');
+        else g(d, 'Feria', 'Supermercado', entre(6000, 9000, 500), 'Efectivo');
       }
     }
     // Cumpleaños en un bar: pagó la mesa de 4 y cobra a los demás
-    g(primerViernes, 'Bar cumpleaños Tomás', 'Salidas y entretención', 18000, 'Crédito', { bruto:72000,
-      division:[{persona:'Camila Rojas',monto:18000,estado:'Pendiente'},{persona:'Matías León',monto:18000,estado:'Pendiente'},{persona:'Javiera Soto',monto:18000,estado:'Pendiente'}] });
-    g(primerViernes, 'Uber a casa', 'Transporte', 7400, 'Crédito');
+    g(primerViernes, 'Bar cumpleaños Tomás', 'Salidas y entretención', 13000, 'Crédito', { bruto:52000,
+      division:[{persona:'Camila Rojas',monto:13000,estado:'Pendiente'},{persona:'Matías León',monto:13000,estado:'Pendiente'},{persona:'Javiera Soto',monto:13000,estado:'Pendiente'}] });
+    g(primerViernes, 'Uber a casa', 'Transporte', 6400, 'Crédito');
     G.sort(function(a, b){ return a[0] - b[0]; });
 
     var movs = [];
@@ -1419,24 +1414,24 @@
     // Sueldo del 24 del mes anterior (viernes previo si cae fin de semana): financia este mes
     var pago = new Date(Y, M - 1, 24); while(pago.getDay() === 0 || pago.getDay() === 6) pago.setDate(pago.getDate() - 1);
     var fPago = iso(pago.getFullYear(), pago.getMonth(), pago.getDate());
-    movs.push({ id:'i-1', tipo:'Ingreso', fecha:fPago, mes:mes, descripcion:'Sueldo', categoria:'Sueldo', monto:1300000, bruto:1300000 });
-    movs.push({ id:'a-1', tipo:'Ahorro', fecha:fPago, mes:mes, descripcion:'Aporte a fondo de ETFs', categoria:'ETFs', monto:100000, bruto:100000 });
-    movs.push({ id:'a-2', tipo:'Ahorro', fecha:fPago, mes:mes, descripcion:'Fondo de emergencia', categoria:'Fondo de emergencia', monto:30000, bruto:30000 });
+    movs.push({ id:'i-1', tipo:'Ingreso', fecha:fPago, mes:mes, descripcion:'Sueldo', categoria:'Sueldo', monto:800000, bruto:800000 });
+    movs.push({ id:'a-1', tipo:'Ahorro', fecha:fPago, mes:mes, descripcion:'Aporte a fondo de ETFs', categoria:'ETFs', monto:20000, bruto:20000 });
+    movs.push({ id:'a-2', tipo:'Ahorro', fecha:fPago, mes:mes, descripcion:'Fondo de emergencia', categoria:'Fondo de emergencia', monto:40000, bruto:40000 });
 
     var pendientes = [
-      { id:'n-p1', fecha:dia(D), descripcion:'MERPAGO*CAFETERIA PROVIDENCIA', monto:3400, medio:'Crédito', origen:'santander', clase:'gasto' },
-      { id:'m-p2', fecha:dia(D), descripcion:'UBER *TRIP', monto:6900, medio:'Crédito', origen:'santander', clase:'gasto' },
-      { id:'m-p3', fecha:dia(D), descripcion:'Transferencia de Camila Rojas', monto:18000, origen:'bchile', clase:'recibida' }
+      { id:'n-p1', fecha:dia(D), descripcion:'MERPAGO*CAFETERIA CENTRO', monto:2800, medio:'Crédito', origen:'santander', clase:'gasto' },
+      { id:'m-p2', fecha:dia(D), descripcion:'SANTA ISABEL 1234', monto:8450, medio:'Débito', origen:'bchile', clase:'gasto' },
+      { id:'m-p3', fecha:dia(D), descripcion:'Transferencia de Camila Rojas', monto:13000, origen:'bchile', clase:'recibida' }
     ];
 
     var deudas = [
-      { id:'d1', fecha:dia(primerViernes), persona:'Camila Rojas', tipo:'Me debe', monto:18000, detalle:'Bar cumpleaños Tomás', estado:'Pendiente' },
-      { id:'d2', fecha:dia(primerViernes), persona:'Matías León', tipo:'Me debe', monto:18000, detalle:'Bar cumpleaños Tomás', estado:'Pendiente' },
-      { id:'d3', fecha:dia(primerViernes), persona:'Javiera Soto', tipo:'Me debe', monto:18000, detalle:'Bar cumpleaños Tomás', estado:'Pendiente' },
-      { id:'d4', fecha:iso(Y, M - 1, 27), persona:'Matías León', tipo:'Me debe', monto:4500, detalle:'Uber compartido', estado:'Pendiente' },
-      { id:'d5', fecha:iso(Y, M - 1, 15), persona:'Valentina Díaz', tipo:'Le debo', monto:46000, detalle:'Entrada concierto', estado:'Pendiente' },
-      { id:'d6', fecha:iso(Y, M - 1, 18), persona:'Tomás Pérez', tipo:'Me debe', monto:9200, detalle:'Almuerzo', estado:'Pagado' },
-      { id:'d7', fecha:iso(Y, M - 1, 11), persona:'Benjamín Muñoz', tipo:'Le debo', monto:12000, detalle:'Cuota asado', estado:'Pagado' },
+      { id:'d1', fecha:dia(primerViernes), persona:'Camila Rojas', tipo:'Me debe', monto:13000, detalle:'Bar cumpleaños Tomás', estado:'Pendiente' },
+      { id:'d2', fecha:dia(primerViernes), persona:'Matías León', tipo:'Me debe', monto:13000, detalle:'Bar cumpleaños Tomás', estado:'Pendiente' },
+      { id:'d3', fecha:dia(primerViernes), persona:'Javiera Soto', tipo:'Me debe', monto:13000, detalle:'Bar cumpleaños Tomás', estado:'Pendiente' },
+      { id:'d4', fecha:iso(Y, M - 1, 27), persona:'Matías León', tipo:'Me debe', monto:3200, detalle:'Uber compartido', estado:'Pendiente' },
+      { id:'d5', fecha:iso(Y, M - 1, 15), persona:'Valentina Díaz', tipo:'Le debo', monto:15000, detalle:'Entrada tocata', estado:'Pendiente' },
+      { id:'d6', fecha:iso(Y, M - 1, 18), persona:'Tomás Pérez', tipo:'Me debe', monto:7000, detalle:'Almuerzo', estado:'Pagado' },
+      { id:'d7', fecha:iso(Y, M - 1, 11), persona:'Benjamín Muñoz', tipo:'Le debo', monto:8000, detalle:'Cuota asado', estado:'Pagado' },
       { id:'d8', fecha:iso(Y, M - 2, 9), persona:'Florencia Vera', tipo:'Me debe', monto:3000, detalle:'Café', estado:'Perdonado' }
     ];
 
